@@ -188,8 +188,8 @@ class Blender(Dataset):
         image = np.array(Image.open(imgin), dtype=np.float32) / 255.
         if args.factor == 2:
           [halfres_h, halfres_w] = [hw // 2 for hw in image.shape[:2]]
-          image = cv2.resize(
-              image, (halfres_w, halfres_h), interpolation=cv2.INTER_AREA)
+          #image = cv2.resize(
+          #    image, (halfres_w, halfres_h), interpolation=cv2.INTER_AREA)
         elif args.factor > 0:
           raise ValueError("Blender dataset only supports factor=0 or 2, {} "
                            "set.".format(args.factor))

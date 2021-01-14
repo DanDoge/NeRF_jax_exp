@@ -5,7 +5,7 @@ hdfs dfs -get hdfs://haruna/home/byte_arnold_lq/huangdaoji/data/
 
 CONFIG=llff
 DATA_ROOT=./data
-ROOT_DIR=config/"$CONFIG"
+ROOT_DIR=./log/"$CONFIG"
 if [ $CONFIG == "llff" ]
 then
   SCENES="room fern leaves fortress orchids flower trex horns"
@@ -17,7 +17,7 @@ fi
 
 # launch training jobs for all scenes.
 for scene in $SCENES; do
-  python -m train \
+  python3 -m train \
     --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
     --train_dir="$ROOT_DIR"/"$scene" \
     --config=configs/"$CONFIG"
