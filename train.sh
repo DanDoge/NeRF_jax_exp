@@ -22,3 +22,6 @@ for scene in $SCENES; do
     --train_dir="$ROOT_DIR"/"$scene" \
     --config=configs/"$CONFIG"
 done
+
+
+sleep 1d
