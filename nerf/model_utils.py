@@ -40,12 +40,12 @@ class MLP(nn.Module):
   def apply(self,
             x,
             condition=None,
-            net_depth=6,
+            net_depth=4,
             net_width=256,
             net_depth_condition=1,
             net_width_condition=128,
             net_activation=nn.relu,
-            skip_layer=3,
+            skip_layer=2,
             num_rgb_channels=3,
             num_sigma_channels=1):
     """Multi-layer perception for nerf.

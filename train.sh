@@ -23,5 +23,24 @@ for scene in $SCENES; do
     --config=configs/"$CONFIG"
 done
 
+# launch evaluation jobs for all scenes.
+for scene in $SCENES; do
+  python -m jaxnerf.eval \
+    --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
+    --train_dir="$ROOT_DIR"/"$scene" \
+    --chunk=4096 \
+    --config=configs/"$CONFIG"
+done
+
+# collect PSNR of all scenes.
+touch "$ROOT_DIR"/psnr.txt
+for scene in $SCENES; do
+  printf "${scene}: " >> "$ROOT_DIR"/psnr.txt
+  cat "$ROOT_DIR"/"$scene"/test_preds/psnr.txt >> \
+    "$ROOT_DIR"/psnr.txt
+  printf $'\n' >> "$ROOT_DIR"/psnr.txt
+done
+
+hdfs -put ./log $ARNOLD_OUTPUT
 
 sleep 5d
