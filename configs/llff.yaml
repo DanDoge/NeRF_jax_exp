@@ -11,3 +11,5 @@ far: 1.
 factor: 4
 llffhold: 8
 noise_std: 1.
+net_depth: 6
+skip_layer: 3
