@@ -233,9 +233,9 @@ def render_image(state, rays, render_fn, rng, normalize_disp, chunk=8192):
   '''
   if normalize_disp:
     disp = (disp - disp.min()) / (disp.max() - disp.min())
-  return (rgb.reshape((height, width, -1)), disp.reshape(
-      (height, width, -1)), acc.reshape((height, width, -1)))
   '''
+  return (rgb.reshape((height, width, -1)), depth.reshape(
+      (height, width, -1)), acc.reshape((height, width, -1)))
 
 
 def compute_psnr(mse):
