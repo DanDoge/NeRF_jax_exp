@@ -104,7 +104,7 @@ class NerfModel(nn.Module):
     rgb = rgb_activation(raw_rgb)
     sigma = sigma_activation(raw_sigma)
     # Volumetric rendering.
-    comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
+    comp_rgb, disp, acc, weights, depth = model_utils.volumetric_rendering(
         rgb,
         sigma,
         z_vals,
@@ -116,6 +116,7 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if num_fine_samples > 0:
+      '''
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
       z_vals, samples = model_utils.sample_pdf(
@@ -128,6 +129,17 @@ class NerfModel(nn.Module):
           num_fine_samples,
           randomized,
       )
+      '''
+      key, rng_1 = random.split(rng_1)
+      mu = depth
+      sigma = ((z_vals - depth[Ellipsis, None]) * (z_vals - depth[Ellipsis, None]) * weights).sum(axis=-1)
+      sigma = jnp.clip(sigma, 0., 1e5) + 1e-10
+      noise = random.normal(key, shape=list(z_vals.shape[:-1]) + [num_fine_samples])
+      z_samples = noise * jnp.sqrt(sigma)[Ellipsis, None] + mu[Ellipsis, None]
+
+      z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+      samples = origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :]
+
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
         raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
@@ -138,7 +150,7 @@ class NerfModel(nn.Module):
                                                  randomized)
       rgb = rgb_activation(raw_rgb)
       sigma = sigma_activation(raw_sigma)
-      comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
+      comp_rgb, disp, acc, unused_weights, depth = model_utils.volumetric_rendering(
           rgb,
           sigma,
           z_vals,
