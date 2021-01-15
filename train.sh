@@ -24,4 +24,4 @@ for scene in $SCENES; do
 done
 
 
-sleep 1d
+sleep 5d

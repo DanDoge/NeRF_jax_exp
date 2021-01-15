@@ -15,15 +15,12 @@
 
 # Lint as: python3
 """Different datasets implementation plus a general port for all the datasets."""
-INTERNAL = False  # pylint: disable=g-statement-before-imports
 import collections
 import json
 import os
 from os import path
 import queue
 import threading
-if not INTERNAL:
-  import cv2  # pylint: disable=g-import-not-at-top
 import jax
 import numpy as np
 from PIL import Image
