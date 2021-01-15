@@ -228,12 +228,14 @@ def render_image(state, rays, render_fn, rng, normalize_disp, chunk=8192):
       chunk_results = render_fn(key_0, key_1, model, chunk_rays)[-1]
       results.append([unshard(x[0], padding) for x in chunk_results])
       # pylint: enable=cell-var-from-loop
-  rgb, disp, acc = [jnp.concatenate(r, axis=0) for r in zip(*results)]
+  rgb, depth, acc = [jnp.concatenate(r, axis=0) for r in zip(*results)]
   # Normalize disp for visualization for ndc_rays in llff front-facing scenes.
+  '''
   if normalize_disp:
     disp = (disp - disp.min()) / (disp.max() - disp.min())
   return (rgb.reshape((height, width, -1)), disp.reshape(
       (height, width, -1)), acc.reshape((height, width, -1)))
+  '''
 
 
 def compute_psnr(mse):
