@@ -21,10 +21,6 @@ for scene in $SCENES; do
     --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
     --train_dir="$ROOT_DIR"/"$scene" \
     --config=configs/"$CONFIG"
-done
-
-# launch evaluation jobs for all scenes.
-for scene in $SCENES; do
   python -m eval \
     --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
     --train_dir="$ROOT_DIR"/"$scene" \
