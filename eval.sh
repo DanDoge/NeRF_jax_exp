@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd /opt/tiger/NeRF_jax
+
 CONFIG=llff
 DATA_ROOT=./data
 ROOT_DIR=./log/"$CONFIG"
@@ -14,7 +16,7 @@ fi
 
 # launch evaluation jobs for all scenes.
 for scene in $SCENES; do
-  python -m jaxnerf.eval \
+  python -m eval \
     --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
     --train_dir="$ROOT_DIR"/"$scene" \
     --chunk=4096 \
@@ -29,3 +31,7 @@ for scene in $SCENES; do
     "$ROOT_DIR"/psnr.txt
   printf $'\n' >> "$ROOT_DIR"/psnr.txt
 done
+
+hdfs dfs -put ./log $ARNOLD_OUTPUT
+
+sleep 9d

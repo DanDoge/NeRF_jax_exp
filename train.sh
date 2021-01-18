@@ -41,6 +41,6 @@ for scene in $SCENES; do
   printf $'\n' >> "$ROOT_DIR"/psnr.txt
 done
 
-hdfs -put ./log $ARNOLD_OUTPUT
+hdfs dfs -put ./log $ARNOLD_OUTPUT
 
-sleep 5d
+sleep 9d
