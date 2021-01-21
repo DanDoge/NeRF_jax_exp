@@ -21,7 +21,7 @@ for scene in $SCENES; do
     --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
     --train_dir="$ROOT_DIR"/"$scene" \
     --config=configs/"$CONFIG"
-  python -m eval \
+  python3 -m eval \
     --data_dir="$DATA_ROOT"/"$DATA_FOLDER"/"$scene" \
     --train_dir="$ROOT_DIR"/"$scene" \
     --chunk=4096 \

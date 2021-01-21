@@ -12,4 +12,4 @@ factor: 4
 llffhold: 8
 noise_std: 1.
 net_depth: 4
-skip_layer: 2
+skip_layer: 5

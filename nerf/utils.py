@@ -100,11 +100,11 @@ def define_flags():
       "(used in the llff dataset only)")
   flags.DEFINE_bool("lindisp", False,
                     "sampling linearly in disparity rather than depth.")
-  flags.DEFINE_string("net_activation", "relu",
+  flags.DEFINE_string("net_activation", "leaky_relu",
                       "activation function used within the MLP.")
   flags.DEFINE_string("rgb_activation", "sigmoid",
                       "activation function used to produce RGB.")
-  flags.DEFINE_string("sigma_activation", "relu",
+  flags.DEFINE_string("sigma_activation", "softplus",
                       "activation function used to produce density.")
   flags.DEFINE_bool(
       "legacy_posenc_order", False,
@@ -113,7 +113,7 @@ def define_flags():
 
   # Train Flags
   flags.DEFINE_float("lr_init", 5e-4, "The initial learning rate.")
-  flags.DEFINE_float("lr_final", 5e-6, "The final learning rate.")
+  flags.DEFINE_float("lr_final", 5e-5, "The final learning rate.")
   flags.DEFINE_integer(
       "lr_delay_steps", 0, "The number of steps at the beginning of "
       "training to reduce the learning rate by lr_delay_mult")
