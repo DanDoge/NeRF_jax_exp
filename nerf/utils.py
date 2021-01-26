@@ -72,7 +72,7 @@ def define_flags():
                     "name of model to use.")
   flags.DEFINE_float("near", 2., "near clip of volumetric rendering.")
   flags.DEFINE_float("far", 6., "far clip of volumentric rendering.")
-  flags.DEFINE_integer("net_depth", 6, "depth of the first part of MLP.")
+  flags.DEFINE_integer("net_depth", 8, "depth of the first part of MLP.")
   flags.DEFINE_integer("net_width", 256, "width of the first part of MLP.")
   flags.DEFINE_integer("net_depth_condition", 1,
                        "depth of the second part of MLP.")
@@ -100,11 +100,11 @@ def define_flags():
       "(used in the llff dataset only)")
   flags.DEFINE_bool("lindisp", False,
                     "sampling linearly in disparity rather than depth.")
-  flags.DEFINE_string("net_activation", "leaky_relu",
+  flags.DEFINE_string("net_activation", "relu",
                       "activation function used within the MLP.")
   flags.DEFINE_string("rgb_activation", "sigmoid",
                       "activation function used to produce RGB.")
-  flags.DEFINE_string("sigma_activation", "softplus",
+  flags.DEFINE_string("sigma_activation", "relu",
                       "activation function used to produce density.")
   flags.DEFINE_bool(
       "legacy_posenc_order", False,
@@ -113,7 +113,7 @@ def define_flags():
 
   # Train Flags
   flags.DEFINE_float("lr_init", 5e-4, "The initial learning rate.")
-  flags.DEFINE_float("lr_final", 5e-5, "The final learning rate.")
+  flags.DEFINE_float("lr_final", 5e-6, "The final learning rate.")
   flags.DEFINE_integer(
       "lr_delay_steps", 0, "The number of steps at the beginning of "
       "training to reduce the learning rate by lr_delay_mult")
@@ -127,7 +127,7 @@ def define_flags():
   flags.DEFINE_integer("print_every", 100,
                        "the number of steps between reports to tensorboard.")
   flags.DEFINE_integer(
-      "render_every", 5000, "the number of steps to render a test image,"
+      "render_every", 500, "the number of steps to render a test image,"
       "better to be x00 for accurate step time record.")
   flags.DEFINE_integer("gc_every", 10000,
                        "the number of steps to run python garbage collection.")
