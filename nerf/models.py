@@ -83,16 +83,6 @@ class NerfModel(nn.Module):
         skip_layer=skip_layer,
         num_rgb_channels=num_rgb_channels,
         num_sigma_channels=num_sigma_channels)
-    mlp_fn_fine = functools.partial(
-        model_utils.MLP,
-        net_depth=net_depth,
-        net_width=net_width,
-        net_depth_condition=net_depth_condition,
-        net_width_condition=net_width_condition,
-        net_activation=net_activation,
-        skip_layer=skip_layer,
-        num_rgb_channels=num_rgb_channels,
-        num_sigma_channels=num_sigma_channels)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, origins, directions,
