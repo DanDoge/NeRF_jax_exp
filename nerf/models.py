@@ -118,14 +118,14 @@ class NerfModel(nn.Module):
     if num_fine_samples > 0:
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
-      z_vals_fine, samples = model_utils.sample_pdf(
+      z_vals_fine, samples = model_utils.sample_pdf_nocoarse(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
           origins,
           directions,
           z_vals,
-          num_fine_samples,
+          num_fine_samples + num_coarse_samples,
           randomized,
       )
 

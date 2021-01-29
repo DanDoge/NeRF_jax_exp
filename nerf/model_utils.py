@@ -324,6 +324,33 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
   return z_vals, (
       origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
 
+def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_samples,
+               randomized):
+  """Hierarchical sampling.
+
+  Args:
+    key: jnp.ndarray(float32), [2,], random number generator.
+    bins: jnp.ndarray(float32), [batch_size, num_bins + 1].
+    weights: jnp.ndarray(float32), [batch_size, num_bins].
+    origins: jnp.ndarray(float32), [batch_size, 3], ray origins.
+    directions: jnp.ndarray(float32), [batch_size, 3], ray directions.
+    z_vals: jnp.ndarray(float32), [batch_size, num_coarse_samples].
+    num_samples: int, the number of samples.
+    randomized: bool, use randomized samples.
+
+  Returns:
+    z_vals: jnp.ndarray(float32),
+      [batch_size, num_coarse_samples + num_fine_samples].
+    points: jnp.ndarray(float32),
+      [batch_size, num_coarse_samples + num_fine_samples, 3].
+  """
+  z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
+                                     randomized)
+  # Compute united z_vals and sample points
+  z_vals = jnp.sort(z_samples, axis=-1)
+  return z_vals, (
+      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
+
 
 def add_gaussian_noise(key, raw, noise_std, randomized):
   """Adds gaussian noise to `raw`, which can used to regularize it.
