@@ -83,6 +83,16 @@ class NerfModel(nn.Module):
         skip_layer=skip_layer,
         num_rgb_channels=num_rgb_channels,
         num_sigma_channels=num_sigma_channels)
+    mlp_fn_fine = functools.partial(
+        model_utils.MLP,
+        net_depth=net_depth,
+        net_width=net_width,
+        net_depth_condition=net_depth_condition,
+        net_width_condition=net_width_condition,
+        net_activation=net_activation,
+        skip_layer=skip_layer,
+        num_rgb_channels=num_rgb_channels,
+        num_sigma_channels=num_sigma_channels)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, origins, directions,
@@ -94,9 +104,9 @@ class NerfModel(nn.Module):
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
           deg_view, legacy_posenc_order)
-      raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+      raw_rgb, raw_sigma, feature_coarse = mlp_fn(samples_enc, viewdirs_enc)
     else:
-      raw_rgb, raw_sigma = mlp_fn(samples_enc)
+      raw_rgb, raw_sigma, feature_coarse = mlp_fn(samples_enc)
     # Add noises to regularize the density predictions if needed
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
@@ -118,7 +128,7 @@ class NerfModel(nn.Module):
     if num_fine_samples > 0:
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
-      z_vals, samples = model_utils.sample_pdf(
+      z_vals_fine, samples = model_utils.sample_pdf(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
@@ -128,11 +138,17 @@ class NerfModel(nn.Module):
           num_fine_samples,
           randomized,
       )
+
+      mix_weight = jnp.exp(-32 * (z_vals_fine[Ellipsis, None] - z_vals[:, None, :]) * (z_vals_fine[Ellipsis, None] - z_vals[:, None, :]))
+      mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
+      feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
+
+
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc, feature_weighted)
       else:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc)
+        raw_rgb, raw_sigma = mlp_fn(samples_enc, feature_weighted)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
                                                  randomized)
@@ -141,7 +157,7 @@ class NerfModel(nn.Module):
       comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
           rgb,
           sigma,
-          z_vals,
+          z_vals_fine,
           directions,
           white_bkgd=white_bkgd,
       )

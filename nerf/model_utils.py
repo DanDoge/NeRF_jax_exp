@@ -40,7 +40,8 @@ class MLP(nn.Module):
   def apply(self,
             x,
             condition=None,
-            net_depth=4,
+            feature_coarse=None, 
+            net_depth=8,
             net_width=256,
             net_depth_condition=1,
             net_width_condition=128,
@@ -84,7 +85,12 @@ class MLP(nn.Module):
       x = dense_layer(x, net_width)
       x = net_activation(x)
       if i % skip_layer == 0 and i > 0:
-        x = jnp.concatenate([x, inputs], axis=-1)
+        if feature_coarse is not None:
+          feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
+          x = jnp.concatenate([x, inputs, feature_coarse], axis=-1)
+        else:
+          x_bkup = x.reshape([-1, num_samples, net_width])
+          x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
@@ -104,7 +110,10 @@ class MLP(nn.Module):
         x = net_activation(x)
     raw_rgb = dense_layer(x, num_rgb_channels).reshape(
         [-1, num_samples, num_rgb_channels])
-    return raw_rgb, raw_sigma
+    if feature_coarse is not None:
+      return raw_rgb, raw_sigma
+    else:
+      return raw_rgb, raw_sigma, x_bkup
 
 
 def sample_along_rays(key, origins, directions, num_samples, near, far,
