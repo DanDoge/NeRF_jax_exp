@@ -155,6 +155,29 @@ def sample_along_rays(key, origins, directions, num_samples, near, far,
   return (z_vals, (origins[Ellipsis, None, :] +
                    z_vals[Ellipsis, :, None] * directions[Ellipsis, None, :]))
 
+def sample_near_depth(key, num_samples, near, far, depth, 
+                      randomized, lindisp):
+
+  t_vals = jnp.linspace(0., 1., num_samples)
+  near = jnp.maximum(depth - 0.1, near)
+  far = jnp.minimum(depth + 0.1, far)
+  if lindisp:
+    z_vals = 1. / (1. / near[Ellipsis, None] * (1. - t_vals[None, Ellipsis]) + 1. / far[Ellipsis, None] * t_vals[None, Ellipsis])
+  else:
+    z_vals = near[Ellipsis, None] * (1. - t_vals[None, Ellipsis]) + far[Ellipsis, None] * t_vals[None, Ellipsis]
+
+  if randomized:
+    mids = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
+    upper = jnp.concatenate([mids, z_vals[Ellipsis, -1:]], -1)
+    lower = jnp.concatenate([z_vals[Ellipsis, :1], mids], -1)
+    t_rand = random.uniform(key, [z_vals.shape[0], num_samples])
+    z_vals = lower + (upper - lower) * t_rand
+  else:
+    # Broadcast z_vals to make the returned shape consistent.
+    z_vals = jnp.broadcast_to(z_vals[None, Ellipsis], [batch_size, num_samples])
+
+  return z_vals
+
 
 def generate_posenc_basis(deg, num_dims):
   """Generates a posenc "basis" of degree `deg` for `num_dims` dimensions."""
