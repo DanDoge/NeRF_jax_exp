@@ -174,7 +174,7 @@ def sample_near_depth(key, num_samples, near, far, depth,
     z_vals = lower + (upper - lower) * t_rand
   else:
     # Broadcast z_vals to make the returned shape consistent.
-    z_vals = jnp.broadcast_to(z_vals[None, Ellipsis], [batch_size, num_samples])
+    z_vals = z_vals#jnp.broadcast_to(z_vals[None, Ellipsis], [batch_size, num_samples])
 
   return z_vals
 
