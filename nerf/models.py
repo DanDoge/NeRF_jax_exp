@@ -116,7 +116,7 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if num_fine_samples > 0:
-      mu = (weights * z_vals).sum(axis=-1)
+      mu = (weights * z_vals).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
       z_vals_near_depth = model_utils.sample_near_depth(key, num_coarse_samples, near, far, mu, randomized, lindisp)
       #z_vals_near_depth = z_vals
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])

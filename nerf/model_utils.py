@@ -84,13 +84,12 @@ class MLP(nn.Module):
     for i in range(net_depth):
       x = dense_layer(x, net_width)
       x = net_activation(x)
+      if i == 0 and feature_coarse is not None:
+        feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
+        x = jnp.concatenate([x, feature_coarse], axis=-1)
       if i % skip_layer == 0 and i > 0:
-        if feature_coarse is not None:
-          feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
-          x = jnp.concatenate([x, inputs, feature_coarse], axis=-1)
-        else:
-          x_bkup = x.reshape([-1, num_samples, net_width])
-          x = jnp.concatenate([x, inputs], axis=-1)
+        x_bkup = x.reshape([-1, num_samples, net_width])
+        x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
@@ -159,8 +158,8 @@ def sample_near_depth(key, num_samples, near, far, depth,
                       randomized, lindisp):
 
   t_vals = jnp.linspace(0., 1., num_samples)
-  near = jnp.maximum(depth - 0.1, near)
-  far = jnp.minimum(depth + 0.1, far)
+  near = jnp.maximum(depth - 0.2, near)
+  far = jnp.minimum(depth + 0.2, far)
   if lindisp:
     z_vals = 1. / (1. / near[Ellipsis, None] * (1. - t_vals[None, Ellipsis]) + 1. / far[Ellipsis, None] * t_vals[None, Ellipsis])
   else:
@@ -176,7 +175,7 @@ def sample_near_depth(key, num_samples, near, far, depth,
     # Broadcast z_vals to make the returned shape consistent.
     z_vals = z_vals#jnp.broadcast_to(z_vals[None, Ellipsis], [batch_size, num_samples])
 
-  return z_vals
+  return lax.stop_gradient(z_vals)
 
 
 def generate_posenc_basis(deg, num_dims):
