@@ -133,7 +133,7 @@ class NerfModel(nn.Module):
           origins,
           directions,
           z_vals_coarse,
-          num_fine_samples,
+          num_fine_samples + num_coarse_samples,
           randomized,
           feature_coarse, 
       )
