@@ -117,14 +117,14 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if num_fine_samples > 0:
-      mu = (weights * z_vals).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
-      sigma = ((z_vals - mu[Ellipsis, None]) * (z_vals - mu[Ellipsis, None]) * weights).sum(axis=-1)
-      sigma = jnp.clip(sigma, 0., 1e5) + 1e-3
-      z_vals_near_depth = model_utils.sample_near_depth(key, num_coarse_samples, near, far, mu, randomized, lindisp)
-      #z_vals_near_depth = z_vals
+      #mu = (weights * z_vals).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
+      #sigma = ((z_vals - mu[Ellipsis, None]) * (z_vals - mu[Ellipsis, None]) * weights).sum(axis=-1)
+      #sigma = jnp.clip(sigma, 0., 1e5) + 1e-3
+      #z_vals_near_depth = model_utils.sample_near_depth(key, num_coarse_samples, near, far, mu, randomized, lindisp)
+      z_vals_near_depth = z_vals
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
-      z_vals_fine, samples = model_utils.sample_pdf(
+      z_vals_fine, samples, feature_weighted = model_utils.sample_pdf(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
@@ -133,11 +133,8 @@ class NerfModel(nn.Module):
           z_vals_near_depth,
           num_fine_samples,
           randomized,
+          feature_coarse, 
       )
-
-      mix_weight = jnp.exp(-1. / lax.stop_gradient(sigma[..., None, None]) * (z_vals_fine[Ellipsis, None] - z_vals[:, None, :]) * (z_vals_fine[Ellipsis, None] - z_vals[:, None, :]))
-      mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
-      feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
 
 
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
