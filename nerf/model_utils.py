@@ -355,7 +355,7 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
       origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :]), lax.stop_gradient(feature)
 
 def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_samples,
-               randomized):
+               randomized, feature_coarse):
   """Hierarchical sampling.
 
   Args:
@@ -376,10 +376,14 @@ def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_sam
   """
   z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
                                      randomized)
+  mix_weight = jnp.exp(-32 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
+  mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
+  feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
   # Compute united z_vals and sample points
   z_vals = jnp.sort(z_samples, axis=-1)
   return z_vals, (
-      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
+      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :]), lax.stop_gradient(feature_weighted)
+
 
 
 def add_gaussian_noise(key, raw, noise_std, randomized):
