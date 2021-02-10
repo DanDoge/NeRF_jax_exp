@@ -86,8 +86,14 @@ class MLP(nn.Module):
       x = net_activation(x)
       if i % skip_layer == 0 and i > 0:
         if feature_coarse is not None:
-          feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
-          x = jnp.concatenate([x, feature_coarse], axis=-1)
+          #feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
+          x_bkup = x.reshape([feature_coarse.shape[0], -1, net_width])
+          mix_weight = jax.nn.softmax(jnp.matmul(x_bkup, jnp.transpose(feature_coarse, (0, 2, 1))) / 16)
+          feature_weighted = jnp.matmul(mix_weight, feature_coarse)
+          #print(x.shape, feature_coarse.shape)
+          #exit()
+          feature_weighted = feature_weighted.reshape([-1, feature_weighted.shape[-1]])
+          x = jnp.concatenate([x, inputs, feature_weighted], axis=-1)
         else:
           x_bkup = x.reshape([-1, num_samples, net_width])
           x = jnp.concatenate([x, inputs], axis=-1)
@@ -343,16 +349,16 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
   z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
                                      randomized)
 
-  mix_weight = jnp.exp(-32 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
-  mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
-  feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
+  #mix_weight = jnp.exp(-32 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
+  #mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
+  #feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
 
   # Compute united z_vals and sample points
   ind = jnp.argsort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
   z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_samples], axis=-1), ind, axis=-1)
-  feature = jnp.take_along_axis(jnp.concatenate([feature_coarse, feature_weighted], axis=-2), ind[Ellipsis, None], axis=-2)
+  #feature = jnp.take_along_axis(jnp.concatenate([feature_coarse, feature_weighted], axis=-2), ind[Ellipsis, None], axis=-2)
   return z_vals, (
-      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :]), lax.stop_gradient(feature)
+      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])#, lax.stop_gradient(feature)
 
 def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_samples,
                randomized, feature_coarse):
