@@ -94,15 +94,16 @@ class NerfModel(nn.Module):
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
           deg_view, legacy_posenc_order)
-      raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+      raw_rgb, raw_sigma, raw_accuracy = mlp_fn(samples_enc, viewdirs_enc)
     else:
-      raw_rgb, raw_sigma = mlp_fn(samples_enc)
+      raw_rgb, raw_sigma, raw_accuracy = mlp_fn(samples_enc)
     # Add noises to regularize the density predictions if needed
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
                                                randomized)
     rgb = rgb_activation(raw_rgb)
     sigma = sigma_activation(raw_sigma)
+    accuracy = rgb_activation(raw_accuracy)
     # Volumetric rendering.
     comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
         rgb,
@@ -118,7 +119,7 @@ class NerfModel(nn.Module):
     if num_fine_samples > 0:
       z_vals_coarse = z_vals
       rgb_coarse = rgb
-      sigma_coarse = sigma
+      sigma_coarse = sigma * accuracy
 
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
@@ -134,9 +135,9 @@ class NerfModel(nn.Module):
       )
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+        raw_rgb, raw_sigma, _ = mlp_fn(samples_enc, viewdirs_enc)
       else:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc)
+        raw_rgb, raw_sigma, _ = mlp_fn(samples_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
                                                  randomized)

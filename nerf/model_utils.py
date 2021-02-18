@@ -87,6 +87,8 @@ class MLP(nn.Module):
         x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
+    raw_acc = dense_layer(x, num_sigma_channels).reshape(
+        [-1, num_samples, num_sigma_channels])
     if condition is not None:
       # Output of the first part of MLP.
       bottleneck = dense_layer(x, net_width)
@@ -104,7 +106,7 @@ class MLP(nn.Module):
         x = net_activation(x)
     raw_rgb = dense_layer(x, num_rgb_channels).reshape(
         [-1, num_samples, num_rgb_channels])
-    return raw_rgb, raw_sigma
+    return raw_rgb, raw_sigma, raw_acc
 
 
 def sample_along_rays(key, origins, directions, num_samples, near, far,
