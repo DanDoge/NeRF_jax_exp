@@ -119,8 +119,8 @@ class NerfModel(nn.Module):
     if num_fine_samples > 0:
       z_vals_coarse = z_vals
       rgb_coarse = rgb
-      # no accuracy
-      sigma_coarse = sigma# * accuracy
+      # has accuracy
+      sigma_coarse = sigma * accuracy
 
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
