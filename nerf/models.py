@@ -119,10 +119,13 @@ class NerfModel(nn.Module):
     if num_fine_samples > 0:
       z_vals_coarse = z_vals
       rgb_coarse = rgb
-      sigma_coarse = sigma * accuracy
+      # no accuracy
+      sigma_coarse = sigma# * accuracy
 
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
+      # nocoarse, sample near depth
+      '''
       z_vals_fine, samples = model_utils.sample_pdf_nocoarse(
           key,
           z_vals_mid,
@@ -132,6 +135,19 @@ class NerfModel(nn.Module):
           z_vals,
           num_fine_samples + num_coarse_samples,
           randomized,
+      )
+      '''
+      mu = (weights * z_vals).sum(axis=-1) / weights.sum(axis=-1)
+      z_vals_fine, samples = model_utils.sample_near_depth(
+          key, 
+          num_fine_samples + num_coarse_samples, 
+          near, 
+          far, 
+          mu, 
+          randomized, 
+          lindisp, 
+          origins, 
+          directions
       )
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
