@@ -94,9 +94,9 @@ class NerfModel(nn.Module):
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
           deg_view, legacy_posenc_order)
-      raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+      raw_rgb, raw_sigma, feature_coarse = mlp_fn(samples_enc, viewdirs_enc)
     else:
-      raw_rgb, raw_sigma = mlp_fn(samples_enc)
+      raw_rgb, raw_sigma, feature_coarse = mlp_fn(samples_enc)
     # Add noises to regularize the density predictions if needed
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
@@ -116,9 +116,10 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if num_fine_samples > 0:
+      z_vals_coarse = z_vals
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
-      z_vals, samples = model_utils.sample_pdf(
+      z_vals, samples = model_utils.sample_pdf_nocoarse(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
@@ -130,14 +131,20 @@ class NerfModel(nn.Module):
       )
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc, feature_coarse)
       else:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc)
+        raw_rgb, raw_sigma = mlp_fn(samples_enc, feature_coarse)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
                                                  randomized)
       rgb = rgb_activation(raw_rgb)
       sigma = sigma_activation(raw_sigma)
+
+      ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
+      rgb = jnp.take_along_axis(rgb, ind[Ellipsis, None], axis=-2)
+      sigma = jnp.take_along_axis(sigma, ind[Ellipsis, None], axis=-2)
+      z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), ind, axis=-1)
+
       comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
           rgb,
           sigma,

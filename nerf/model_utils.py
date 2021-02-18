@@ -34,13 +34,15 @@ class TrainState:
   model_state: nn.Collection
 
 
+
 class MLP(nn.Module):
   """A simple MLP."""
 
   def apply(self,
             x,
             condition=None,
-            net_depth=4,
+            feature_coarse=None, 
+            net_depth=8,
             net_width=256,
             net_depth_condition=1,
             net_width_condition=128,
@@ -84,7 +86,15 @@ class MLP(nn.Module):
       x = dense_layer(x, net_width)
       x = net_activation(x)
       if i % skip_layer == 0 and i > 0:
-        x = jnp.concatenate([x, inputs], axis=-1)
+        if feature_coarse is not None:
+          x = jnp.concatenate([x, inputs], axis=-1)
+          x = x.reshape([feature_coarse.shape[0], -1, feature_coarse.shape[-1]])
+          x = jnp.concatenate([x, feature_coarse], axis=-2)
+          num_samples = x.shape[1]
+          x = x.reshape([-1, x.shape[-1]])
+        else:
+          x = jnp.concatenate([x, inputs], axis=-1)
+          x_bkup = x.reshape([-1, num_samples, x.shape[-1]])
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
@@ -104,7 +114,10 @@ class MLP(nn.Module):
         x = net_activation(x)
     raw_rgb = dense_layer(x, num_rgb_channels).reshape(
         [-1, num_samples, num_rgb_channels])
-    return raw_rgb, raw_sigma
+    if feature_coarse is not None:
+      return raw_rgb, raw_sigma
+    else:
+      return raw_rgb, raw_sigma, x_bkup
 
 
 def sample_along_rays(key, origins, directions, num_samples, near, far,
@@ -312,6 +325,33 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
                                      randomized)
   # Compute united z_vals and sample points
   z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+  return z_vals, (
+      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
+
+def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_samples,
+               randomized):
+  """Hierarchical sampling.
+
+  Args:
+    key: jnp.ndarray(float32), [2,], random number generator.
+    bins: jnp.ndarray(float32), [batch_size, num_bins + 1].
+    weights: jnp.ndarray(float32), [batch_size, num_bins].
+    origins: jnp.ndarray(float32), [batch_size, 3], ray origins.
+    directions: jnp.ndarray(float32), [batch_size, 3], ray directions.
+    z_vals: jnp.ndarray(float32), [batch_size, num_coarse_samples].
+    num_samples: int, the number of samples.
+    randomized: bool, use randomized samples.
+
+  Returns:
+    z_vals: jnp.ndarray(float32),
+      [batch_size, num_coarse_samples + num_fine_samples].
+    points: jnp.ndarray(float32),
+      [batch_size, num_coarse_samples + num_fine_samples, 3].
+  """
+  z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
+                                     randomized)
+  # Compute united z_vals and sample points
+  z_vals = jnp.sort(z_samples, axis=-1)
   return z_vals, (
       origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
 
