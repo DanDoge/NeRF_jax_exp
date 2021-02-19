@@ -17,64 +17,29 @@
 """Helper functions/classes for model definition."""
 
 import functools
+from typing import Any, Callable
 
-import flax
-from flax import nn
-from flax import optim
+from flax import linen as nn
 import jax
 from jax import lax
 from jax import random
 import jax.numpy as jnp
 
 
-@flax.struct.dataclass
-class TrainState:
-  step: int
-  optimizer: optim.Optimizer
-  model_state: nn.Collection
-
-
 
 class MLP(nn.Module):
   """A simple MLP."""
+  net_depth: int = 8  # The depth of the first part of MLP.
+  net_width: int = 256  # The width of the first part of MLP.
+  net_depth_condition: int = 1  # The depth of the second part of MLP.
+  net_width_condition: int = 128  # The width of the second part of MLP.
+  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
+  skip_layer: int = 4  # The layer to add skip layers to.
+  num_rgb_channels: int = 3  # The number of RGB channels.
+  num_sigma_channels: int = 1  # The number of sigma channels.
 
-  def apply(self,
-            x,
-            condition=None,
-            feature_coarse=None, 
-            net_depth=8,
-            net_width=256,
-            net_depth_condition=1,
-            net_width_condition=128,
-            net_activation=nn.relu,
-            skip_layer=2,
-            num_rgb_channels=3,
-            num_sigma_channels=1):
-    """Multi-layer perception for nerf.
-
-    Args:
-      x: jnp.ndarray(float32), [batch, num_samples, feature], points.
-      condition: jnp.ndarray(float32), [batch, feature], if not None, this
-        variable will be part of the input to the second part of the MLP
-        concatenated with the output vector of the first part of the MLP. If
-        None, only the first part of the MLP will be used with input x. In the
-        original paper, this variable is the view direction.
-      net_depth: int, the depth of the first part of MLP.
-      net_width: int, the width of the first part of MLP.
-      net_depth_condition: int, the depth of the second part of MLP.
-      net_width_condition: int, the width of the second part of MLP.
-      net_activation: function, the activation function used in the MLP.
-      skip_layer: int, add a skip connection to the output vector of every
-        skip_layer layers.
-      num_rgb_channels: int, the number of RGB channels.
-      num_sigma_channels: int, the number of density channels.
-
-    Returns:
-      raw_rgb: jnp.ndarray(float32), with a shape of
-           [batch, num_samples, num_rgb_channels].
-      raw_sigma: jnp.ndarray(float32), with a shape of
-           [batch, num_samples, num_sigma_channels].
-    """
+  @nn.compact
+  def __call__(self, x, condition=None):
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
@@ -82,48 +47,60 @@ class MLP(nn.Module):
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
 
     inputs = x
-    for i in range(net_depth):
-      x = dense_layer(x, net_width)
-      x = net_activation(x)
-      if i % skip_layer == 0 and i > 0:
-        if feature_coarse is not None:
+    for i in range(self.net_depth):
+      x = dense_layer(self.net_width)(x)
+      x = self.net_activation(x)
+      if i % self.skip_layer == 0 and i > 0:
           x = jnp.concatenate([x, inputs], axis=-1)
-          x = x.reshape([feature_coarse.shape[0], -1, feature_coarse.shape[-1]])
-          x = jnp.concatenate([x, feature_coarse], axis=-2)
-          num_samples = x.shape[1]
-          x = x.reshape([-1, x.shape[-1]])
-        else:
-          x = jnp.concatenate([x, inputs], axis=-1)
-          x_bkup = x.reshape([-1, num_samples, x.shape[-1]])
-    raw_sigma = dense_layer(x, num_sigma_channels).reshape(
-        [-1, num_samples, num_sigma_channels])
+    x = jnp.concatenate([x, inputs], axis=-1)
+    x = x.reshape([-1, num_samples, x.shape[-1]])
+    return x
+
+class MLP_head(nn.Module):
+  """A simple MLP."""
+  net_depth: int = 8  # The depth of the first part of MLP.
+  net_width: int = 256  # The width of the first part of MLP.
+  net_depth_condition: int = 1  # The depth of the second part of MLP.
+  net_width_condition: int = 128  # The width of the second part of MLP.
+  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
+  num_rgb_channels: int = 3  # The number of RGB channels.
+  num_sigma_channels: int = 1  # The number of sigma channels.
+
+  @nn.compact
+  def __call__(self, x, condition=None):
+    feature_dim = x.shape[-1]
+    num_samples = x.shape[1]
+    x = x.reshape([-1, feature_dim])
+    dense_layer = functools.partial(
+        nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+
+    inputs = x
+    for i in range(self.net_depth):
+      x = dense_layer(self.net_width)(x)
+      x = self.net_activation(x)
+    raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
+        [-1, num_samples, self.num_sigma_channels])
     if condition is not None:
-      # Output of the first part of MLP.
-      bottleneck = dense_layer(x, net_width)
-      # Broadcast condition from [batch, feature] to
-      # [batch, num_samples, feature] since all the samples along the same ray
-      # has the same viewdir.
+      bottleneck = dense_layer(self.net_width)(x)
       condition = jnp.tile(condition[:, None, :], (1, num_samples, 1))
-      # Collapse the [batch, num_samples, feature] tensor to
-      # [batch * num_samples, feature] so that it can be feed into nn.Dense.
       condition = condition.reshape([-1, condition.shape[-1]])
       x = jnp.concatenate([bottleneck, condition], axis=-1)
-      # Here use 1 extra layer to align with the original nerf model.
-      for i in range(net_depth_condition):
-        x = dense_layer(x, net_width_condition)
-        x = net_activation(x)
-    raw_rgb = dense_layer(x, num_rgb_channels).reshape(
-        [-1, num_samples, num_rgb_channels])
-    if feature_coarse is not None:
-      return raw_rgb, raw_sigma
-    else:
-      return raw_rgb, raw_sigma, x_bkup
+      for i in range(self.net_depth_condition):
+        x = dense_layer(self.net_width_condition)(x)
+        x = self.net_activation(x)
+    raw_rgb = dense_layer(self.num_rgb_channels)(x).reshape(
+        [-1, num_samples, self.num_rgb_channels])
+
+    return raw_rgb, raw_sigma
+
+
+def cast_rays(z_vals, origins, directions):
+  return origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :]
 
 
 def sample_along_rays(key, origins, directions, num_samples, near, far,
                       randomized, lindisp):
   """Stratified sampling along the rays.
-
   Args:
     key: jnp.ndarray, random generator key.
     origins: jnp.ndarray(float32), [batch_size, 3], ray origins.
@@ -133,7 +110,6 @@ def sample_along_rays(key, origins, directions, num_samples, near, far,
     far: float, far clip.
     randomized: bool, use randomized stratified sampling.
     lindisp: bool, sampling linearly in disparity rather than depth.
-
   Returns:
     z_vals: jnp.ndarray, [batch_size, num_samples], sampled z values.
     points: jnp.ndarray, [batch_size, num_samples, 3], sampled points.
@@ -156,56 +132,45 @@ def sample_along_rays(key, origins, directions, num_samples, near, far,
     # Broadcast z_vals to make the returned shape consistent.
     z_vals = jnp.broadcast_to(z_vals[None, Ellipsis], [batch_size, num_samples])
 
-  return (z_vals, (origins[Ellipsis, None, :] +
-                   z_vals[Ellipsis, :, None] * directions[Ellipsis, None, :]))
+  coords = cast_rays(z_vals, origins, directions)
+  return z_vals, coords
 
 
-def generate_posenc_basis(deg, num_dims):
-  """Generates a posenc "basis" of degree `deg` for `num_dims` dimensions."""
-  return jnp.concatenate([2**i * jnp.eye(num_dims) for i in range(deg)], 1)
-
-
-def encode_coordinate(x, basis, legacy_posenc_order=False):
-  """Concatenate `x` with Fourier features of `x` projected onto `basis`."""
-  xb = x @ basis
-  # Instead of computing [sin(x), cos(x)], we use the trig identity
-  # cos(x) = sin(x + pi/2) and do one vectorized call to sin([x, x+pi/2]).
-  four_feat = jnp.sin(jnp.concatenate([xb, xb + 0.5 * jnp.pi], axis=-1))
-  # TODO(bydeng): remove this re-ordering when a new batch of pre-trained
-  # models is ready.
-  if legacy_posenc_order:
-    four_feat = jnp.moveaxis(
-        jnp.reshape(four_feat,
-                    list(four_feat.shape[:-1]) + [2, -1, x.shape[-1]]), -3, -2)
-    four_feat = jnp.reshape(four_feat, list(four_feat.shape[:-3]) + [-1])
-  return jnp.concatenate([x] + [four_feat], axis=-1)
-
-
-def posenc(x, deg, legacy_posenc_order=False):
-  """Concatenate `x` with a positional encoding of `x` with degree `deg`.
-
+def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
+  """Cat x with a positional encoding of x with scales 2^[min_deg, max_deg-1].
+  Instead of computing [sin(x), cos(x)], we use the trig identity
+  cos(x) = sin(x + pi/2) and do one vectorized call to sin([x, x+pi/2]).
   Args:
     x: jnp.ndarray, variables to be encoded. Note that x should be in [-pi, pi].
-    deg: int, the degree of the encoding.
+    min_deg: int, the minimum (inclusive) degree of the encoding.
+    max_deg: int, the maximum (exclusive) degree of the encoding.
     legacy_posenc_order: bool, keep the same ordering as the original tf code.
-
   Returns:
     encoded: jnp.ndarray, encoded variables.
   """
-  return encode_coordinate(x, generate_posenc_basis(deg, x.shape[-1]),
-                           legacy_posenc_order)
+  if min_deg == max_deg:
+    return x
+  scales = jnp.array([2**i for i in range(min_deg, max_deg)])
+  if legacy_posenc_order:
+    xb = x[Ellipsis, None, :] * scales[:, None]
+    four_feat = jnp.reshape(
+        jnp.sin(jnp.stack([xb, xb + 0.5 * jnp.pi], -2)),
+        list(x.shape[:-1]) + [-1])
+  else:
+    xb = jnp.reshape((x[Ellipsis, None, :] * scales[:, None]),
+                     list(x.shape[:-1]) + [-1])
+    four_feat = jnp.sin(jnp.concatenate([xb, xb + 0.5 * jnp.pi], axis=-1))
+  return jnp.concatenate([x] + [four_feat], axis=-1)
 
 
 def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   """Volumetric Rendering Function.
-
   Args:
     rgb: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
     sigma: jnp.ndarray(float32), density, [batch_size, num_samples, 1].
     z_vals: jnp.ndarray(float32), [batch_size, num_samples].
     dirs: jnp.ndarray(float32), [batch_size, 3].
     white_bkgd: bool.
-
   Returns:
     comp_rgb: jnp.ndarray(float32), [batch_size, 3].
     disp: jnp.ndarray(float32), [batch_size].
@@ -242,14 +207,12 @@ def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
 
 def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):
   """Piecewise-Constant PDF sampling.
-
   Args:
     key: jnp.ndarray(float32), [2,], random number generator.
     bins: jnp.ndarray(float32), [batch_size, num_bins + 1].
     weights: jnp.ndarray(float32), [batch_size, num_bins].
     num_samples: int, the number of samples.
     randomized: bool, use randomized samples.
-
   Returns:
     z_samples: jnp.ndarray(float32), [batch_size, num_samples].
   """
@@ -304,7 +267,6 @@ def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):
 def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
                randomized):
   """Hierarchical sampling.
-
   Args:
     key: jnp.ndarray(float32), [2,], random number generator.
     bins: jnp.ndarray(float32), [batch_size, num_bins + 1].
@@ -314,7 +276,6 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
     z_vals: jnp.ndarray(float32), [batch_size, num_coarse_samples].
     num_samples: int, the number of samples.
     randomized: bool, use randomized samples.
-
   Returns:
     z_vals: jnp.ndarray(float32),
       [batch_size, num_coarse_samples + num_fine_samples].
@@ -325,13 +286,12 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
                                      randomized)
   # Compute united z_vals and sample points
   z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
-  return z_vals, (
-      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
+  coords = cast_rays(z_vals, origins, directions)
+  return z_vals, coords
 
 def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_samples,
                randomized):
   """Hierarchical sampling.
-
   Args:
     key: jnp.ndarray(float32), [2,], random number generator.
     bins: jnp.ndarray(float32), [batch_size, num_bins + 1].
@@ -341,7 +301,6 @@ def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_sam
     z_vals: jnp.ndarray(float32), [batch_size, num_coarse_samples].
     num_samples: int, the number of samples.
     randomized: bool, use randomized samples.
-
   Returns:
     z_vals: jnp.ndarray(float32),
       [batch_size, num_coarse_samples + num_fine_samples].
@@ -352,19 +311,17 @@ def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_sam
                                      randomized)
   # Compute united z_vals and sample points
   z_vals = jnp.sort(z_samples, axis=-1)
-  return z_vals, (
-      origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * directions[Ellipsis, None, :])
+  coords = cast_rays(z_vals, origins, directions)
+  return z_vals, coords
 
 
 def add_gaussian_noise(key, raw, noise_std, randomized):
   """Adds gaussian noise to `raw`, which can used to regularize it.
-
   Args:
     key: jnp.ndarray(float32), [2,], random number generator.
     raw: jnp.ndarray(float32), arbitrary shape.
     noise_std: float, The standard deviation of the noise to be added.
     randomized: bool, add noise if randomized is True.
-
   Returns:
     raw + noise: jnp.ndarray(float32), with the same shape as `raw`.
   """

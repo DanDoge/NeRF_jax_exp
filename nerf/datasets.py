@@ -15,7 +15,7 @@
 
 # Lint as: python3
 """Different datasets implementation plus a general port for all the datasets."""
-import collections
+INTERNAL = False  # pylint: disable=g-statement-before-imports
 import json
 import os
 from os import path
@@ -26,16 +26,32 @@ import numpy as np
 from PIL import Image
 from nerf import utils
 
-Rays = collections.namedtuple("Rays", ["origins", "directions", "viewdirs"])
-
-
-def ray_fn(fn, rays):
-  """Applies `fn` to each element of `rays`, and cast to a `Rays` namedtuple."""
-  return Rays(*[fn(r) for r in rays])
-
 
 def get_dataset(split, args):
   return dataset_dict[args.dataset](split, args)
+
+
+def convert_to_ndc(origins, directions, focal, w, h, near=1.):
+  """Convert a set of rays to NDC coordinates."""
+  # Shift ray origins to near plane
+  t = -(near + origins[Ellipsis, 2]) / directions[Ellipsis, 2]
+  origins = origins + t[Ellipsis, None] * directions
+
+  dx, dy, dz = tuple(np.moveaxis(directions, -1, 0))
+  ox, oy, oz = tuple(np.moveaxis(origins, -1, 0))
+
+  # Projection
+  o0 = -((2 * focal) / w) * (ox / oz)
+  o1 = -((2 * focal) / h) * (oy / oz)
+  o2 = 1 + 2 * near / oz
+
+  d0 = -((2 * focal) / w) * (dx / dz - ox / oz)
+  d1 = -((2 * focal) / h) * (dy / dz - oy / oz)
+  d2 = -2 * near / oz
+
+  origins = np.stack([o0, o1, o2], -1)
+  directions = np.stack([d0, d1, d2], -1)
+  return origins, directions
 
 
 class Dataset(threading.Thread):
@@ -55,7 +71,7 @@ class Dataset(threading.Thread):
           "the split argument should be either \"train\" or \"test\", set"
           "to {} here.".format(split))
     self.batch_size = args.batch_size // jax.host_count()
-    self.image_batching = args.image_batching
+    self.batching = args.batching
     self.render_path = args.render_path
     self.start()
 
@@ -64,7 +80,6 @@ class Dataset(threading.Thread):
 
   def __next__(self):
     """Get the next training batch or test example.
-
     Returns:
       batch: dict, has "pixels" and "rays".
     """
@@ -76,7 +91,6 @@ class Dataset(threading.Thread):
 
   def peek(self):
     """Peek at the next training batch or test example without dequeuing it.
-
     Returns:
       batch: dict, has "pixels" and "rays".
     """
@@ -103,14 +117,18 @@ class Dataset(threading.Thread):
     self._load_renderings(args)
     self._generate_rays()
 
-    if args.image_batching:
+    if args.batching == "all_images":
       # flatten the ray and image dimension together.
       self.images = self.images.reshape([-1, 3])
-      self.rays = ray_fn(lambda r: r.reshape([-1, r.shape[-1]]), self.rays)
-    else:
+      self.rays = utils.namedtuple_map(lambda r: r.reshape([-1, r.shape[-1]]),
+                                       self.rays)
+    elif args.batching == "single_image":
       self.images = self.images.reshape([-1, self.resolution, 3])
-      self.rays = ray_fn(
+      self.rays = utils.namedtuple_map(
           lambda r: r.reshape([-1, self.resolution, r.shape[-1]]), self.rays)
+    else:
+      raise NotImplementedError(
+          f"{args.batching} batching strategy is not implemented.")
 
   def _test_init(self, args):
     self._load_renderings(args)
@@ -120,17 +138,21 @@ class Dataset(threading.Thread):
   def _next_train(self):
     """Sample next training batch."""
 
-    if self.image_batching:
+    if self.batching == "all_images":
       ray_indices = np.random.randint(0, self.rays[0].shape[0],
                                       (self.batch_size,))
       batch_pixels = self.images[ray_indices]
-      batch_rays = ray_fn(lambda r: r[ray_indices], self.rays)
-    else:
+      batch_rays = utils.namedtuple_map(lambda r: r[ray_indices], self.rays)
+    elif self.batching == "single_image":
       image_index = np.random.randint(0, self.n_examples, ())
       ray_indices = np.random.randint(0, self.rays[0][0].shape[0],
                                       (self.batch_size,))
       batch_pixels = self.images[image_index][ray_indices]
-      batch_rays = ray_fn(lambda r: r[image_index][ray_indices], self.rays)
+      batch_rays = utils.namedtuple_map(lambda r: r[image_index][ray_indices],
+                                        self.rays)
+    else:
+      raise NotImplementedError(
+          f"{self.batching} batching strategy is not implemented.")
     return {"pixels": batch_pixels, "rays": batch_rays}
 
   def _next_test(self):
@@ -139,11 +161,11 @@ class Dataset(threading.Thread):
     self.it = (self.it + 1) % self.n_examples
 
     if self.render_path:
-      return {"rays": ray_fn(lambda r: r[idx], self.render_rays)}
+      return {"rays": utils.namedtuple_map(lambda r: r[idx], self.render_rays)}
     else:
       return {
           "pixels": self.images[idx],
-          "rays": ray_fn(lambda r: r[idx], self.rays)
+          "rays": utils.namedtuple_map(lambda r: r[idx], self.rays)
       }
 
   # TODO(bydeng): Swap this function with a more flexible camera model.
@@ -153,16 +175,16 @@ class Dataset(threading.Thread):
         np.arange(self.w, dtype=np.float32),  # X-Axis (columns)
         np.arange(self.h, dtype=np.float32),  # Y-Axis (rows)
         indexing="xy")
-    dirs = np.stack([(x - self.w * 0.5) / self.focal,
-                     -(y - self.h * 0.5) / self.focal, -np.ones_like(x)],
-                    axis=-1)
-    directions = ((dirs[None, Ellipsis, None, :] *
+    camera_dirs = np.stack([(x - self.w * 0.5) / self.focal,
+                            -(y - self.h * 0.5) / self.focal, -np.ones_like(x)],
+                           axis=-1)
+    directions = ((camera_dirs[None, Ellipsis, None, :] *
                    self.camtoworlds[:, None, None, :3, :3]).sum(axis=-1))
     origins = np.broadcast_to(self.camtoworlds[:, None, None, :3, -1],
                               directions.shape)
-    # TODO(barron): Avoid the extra memory overhead wasted here on `viewdirs`.
-    self.rays = Rays(
-        origins=origins, directions=directions, viewdirs=directions)
+    viewdirs = directions / np.linalg.norm(directions, axis=-1, keepdims=True)
+    self.rays = utils.Rays(
+        origins=origins, directions=directions, viewdirs=viewdirs)
 
 
 class Blender(Dataset):
@@ -190,7 +212,7 @@ class Blender(Dataset):
         elif args.factor > 0:
           raise ValueError("Blender dataset only supports factor=0 or 2, {} "
                            "set.".format(args.factor))
-      cams.append(frame["transform_matrix"])
+      cams.append(np.array(frame["transform_matrix"], dtype=np.float32))
       images.append(image)
     self.images = np.stack(images, axis=0)
     if args.white_bkgd:
@@ -303,40 +325,21 @@ class LLFF(Dataset):
     super()._generate_rays()
 
     if not self.spherify:
-      origins = self.rays.origins
-      directions = self.rays.directions
-      viewdirs = directions
-      near = 1.
-
-      # Shift ray origins to near plane
-      t = -(near + origins[Ellipsis, 2]) / directions[Ellipsis, 2]
-      origins = origins + t[Ellipsis, None] * directions
-
-      dx, dy, dz = tuple(np.moveaxis(directions, -1, 0))
-      ox, oy, oz = tuple(np.moveaxis(origins, -1, 0))
-
-      # Projection
-      o0 = -1. * ((2. * self.focal) / self.w) * ox / oz
-      o1 = -1. * ((2. * self.focal) / self.h) * oy / oz
-      o2 = 1. + 2. * near / oz
-
-      d0 = (-1. * ((2. * self.focal) / self.w) * (dx / dz - ox / oz))
-      d1 = (-1. * ((2. * self.focal) / self.h) * (dy / dz - oy / oz))
-      d2 = -2. * near / oz
-
-      origins = np.stack([o0, o1, o2], -1)
-      directions = np.stack([d0, d1, d2], -1)
-      self.rays = Rays(origins=origins,
-                       directions=directions,
-                       viewdirs=viewdirs)
+      ndc_origins, ndc_directions = convert_to_ndc(self.rays.origins,
+                                                   self.rays.directions,
+                                                   self.focal, self.w, self.h)
+      self.rays = utils.Rays(
+          origins=ndc_origins,
+          directions=ndc_directions,
+          viewdirs=self.rays.viewdirs)
 
     # Split poses from the dataset and generated poses
     if self.split == "test":
       self.camtoworlds = self.camtoworlds[n_render_poses:]
       split = [np.split(r, [n_render_poses], 0) for r in self.rays]
       split0, split1 = zip(*split)
-      self.render_rays = Rays(*split0)
-      self.rays = Rays(*split1)
+      self.render_rays = utils.Rays(*split0)
+      self.rays = utils.Rays(*split1)
 
   def _recenter_poses(self, poses):
     """Recenter poses according to the original NeRF code."""
