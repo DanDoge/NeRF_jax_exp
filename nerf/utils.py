@@ -153,7 +153,7 @@ def define_flags():
   flags.DEFINE_integer("print_every", 100,
                        "the number of steps between reports to tensorboard.")
   flags.DEFINE_integer(
-      "render_every", 5000, "the number of steps to render a test image,"
+      "render_every", 500, "the number of steps to render a test image,"
       "better to be x00 for accurate step time record.")
   flags.DEFINE_integer("gc_every", 10000,
                        "the number of steps to run python garbage collection.")
