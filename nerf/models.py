@@ -125,7 +125,7 @@ class NerfModel(nn.Module):
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
       # nocoarse or sample near depth
-      
+      '''
       z_vals_fine, samples = model_utils.sample_pdf_nocoarse(
           key,
           z_vals_mid,
@@ -138,6 +138,8 @@ class NerfModel(nn.Module):
       )
       '''
       mu = (weights * z_vals).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
+      # zeroout coarse estimation near depth
+      sigma_coarse = jnp.where(((z_vals_coarse > mu[Ellipsis, None] - 0.1) & (z_vals_coarse < mu[Ellipsis, None] + 0.1))[Ellipsis, None], 0., sigma_coarse)
       z_vals_fine, samples = model_utils.sample_near_depth(
           key, 
           num_fine_samples + num_coarse_samples, 
@@ -149,8 +151,7 @@ class NerfModel(nn.Module):
           origins, 
           directions
       )
-      '''
-      samples_enc = model_utils.posenc(samples, 0, 2 * deg_point, 2, legacy_posenc_order)
+      samples_enc = model_utils.posenc(samples, 0, deg_point, 1, legacy_posenc_order)
       if use_viewdirs:
         raw_rgb, raw_sigma, _ = mlp_fn(samples_enc, viewdirs_enc)
       else:
