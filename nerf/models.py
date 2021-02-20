@@ -88,12 +88,12 @@ class NerfModel(nn.Module):
     z_vals, samples = model_utils.sample_along_rays(key, origins, directions,
                                                     num_coarse_samples, near,
                                                     far, randomized, lindisp)
-    samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
+    samples_enc = model_utils.posenc(samples, 0, deg_point, 1, legacy_posenc_order)
     # Point attribute predictions
     if use_viewdirs:
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
-          deg_view, legacy_posenc_order)
+          0, deg_view, 1, legacy_posenc_order)
       raw_rgb, raw_sigma, raw_accuracy = mlp_fn(samples_enc, viewdirs_enc)
     else:
       raw_rgb, raw_sigma, raw_accuracy = mlp_fn(samples_enc)
@@ -137,7 +137,7 @@ class NerfModel(nn.Module):
           randomized,
       )
       '''
-      mu = (weights * z_vals).sum(axis=-1) / weights.sum(axis=-1)
+      mu = (weights * z_vals).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
       z_vals_fine, samples = model_utils.sample_near_depth(
           key, 
           num_fine_samples + num_coarse_samples, 
@@ -149,7 +149,7 @@ class NerfModel(nn.Module):
           origins, 
           directions
       )
-      samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
+      samples_enc = model_utils.posenc(samples, 0, 2 * deg_point, 2, legacy_posenc_order)
       if use_viewdirs:
         raw_rgb, raw_sigma, _ = mlp_fn(samples_enc, viewdirs_enc)
       else:
