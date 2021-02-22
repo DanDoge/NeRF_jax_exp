@@ -84,10 +84,11 @@ class MLP(nn.Module):
     for i in range(net_depth):
       x = dense_layer(x, net_width)
       x = net_activation(x)
-      if i % skip_layer == 0 and i > 0:
+      if i == 0:
         if feature_coarse is not None:
           feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
           x = jnp.concatenate([x, feature_coarse], axis=-1)
+      if i % skip_layer == 0 and i > 0:
         else:
           x_bkup = x.reshape([-1, num_samples, net_width])
           x = jnp.concatenate([x, inputs], axis=-1)
