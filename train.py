@@ -185,7 +185,7 @@ def main(unused_argv):
         summary_writer.scalar("test_psnr", psnr, step)
         summary_writer.image("test_pred_color", pred_color, step)
         summary_writer.image("test_pred_disp", pred_disp, step)
-        summary_writer.image("test_pred_acc", pred_acc, step)
+        #summary_writer.image("test_pred_acc", pred_acc, step)
         summary_writer.image("test_target", test_case["pixels"], step)
     if jax.host_id() != 0:  # Only log via host 0.
       continue
