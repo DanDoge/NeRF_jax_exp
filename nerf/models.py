@@ -176,7 +176,7 @@ class NerfModel(nn.Module):
           directions,
           white_bkgd=white_bkgd,
       )
-      ret.append((comp_rgb, disp, acc))
+      ret.append((comp_rgb, disp, unused_weights))
     return ret
 
 

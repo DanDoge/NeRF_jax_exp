@@ -4,7 +4,7 @@ num_coarse_samples: 64
 num_fine_samples: 128
 use_viewdirs: true
 white_bkgd: false
-batch_size: 4096
+batch_size: 40
 randomized: true
 near: 0.
 far: 1.

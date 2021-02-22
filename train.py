@@ -29,6 +29,7 @@ from flax.training import checkpoints
 import jax
 from jax import config
 from jax import random
+from jax import numpy as jnp
 import numpy as np
 
 from nerf import datasets
@@ -67,7 +68,8 @@ def train_step(rng_key, state, batch, lr):
           "ret should contain either 1 set of output (coarse only), or 2 sets"
           "of output (coarse as ret[0] and fine as ret[1]).")
     # The main prediction is always at the end of the ret list.
-    rgb, unused_disp, unused_acc = ret[-1]
+    rgb, unused_disp, weight = ret[-1]
+    weight_loss = (jnp.log(weight + 1e-5) + jnp.log(1. - weight + 1e-5)).mean()
     loss = ((rgb - batch["pixels"][Ellipsis, :3])**2).mean()
     psnr = utils.compute_psnr(loss)
     stats = [utils.Stats(loss=loss, psnr=psnr)]
@@ -81,7 +83,7 @@ def train_step(rng_key, state, batch, lr):
     else:
       loss_c = 0.
       psnr_c = 0.
-    return loss + loss_c, (new_model_state, stats)
+    return loss + loss_c + 0.1 * weight_loss, (new_model_state, stats)
 
   step = state.step
   optimizer = state.optimizer

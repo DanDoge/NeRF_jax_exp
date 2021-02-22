@@ -114,7 +114,7 @@ def main(unused_argv):
     if (not FLAGS.eval_once) and (jax.host_id() == 0):
       summary_writer.image("pred_color", showcase_color, state.step)
       summary_writer.image("pred_disp", showcase_disp, state.step)
-      summary_writer.image("pred_acc", showcase_acc, state.step)
+      #summary_writer.image("pred_acc", showcase_acc, state.step)
       if not FLAGS.render_path:
         summary_writer.scalar("psnr", np.mean(np.array(psnrs)), state.step)
         summary_writer.image("target", showcase_gt, state.step)
