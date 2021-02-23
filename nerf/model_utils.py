@@ -89,9 +89,8 @@ class MLP(nn.Module):
           feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
           x = jnp.concatenate([x, feature_coarse], axis=-1)
       if i % skip_layer == 0 and i > 0:
-        else:
-          x_bkup = x.reshape([-1, num_samples, net_width])
-          x = jnp.concatenate([x, inputs], axis=-1)
+        x_bkup = x.reshape([-1, num_samples, net_width])
+        x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
