@@ -60,80 +60,63 @@ class NerfModel(nn.Module):
   @nn.compact
   def __call__(self, rng_0, rng_1, rays, randomized):
     """Nerf Model.
-
     Args:
       rng_0: jnp.ndarray, random number generator for coarse model sampling.
       rng_1: jnp.ndarray, random number generator for fine model sampling.
-      origins: jnp.ndarray(float32), [batch_size, 3], each ray origin.
-      directions: jnp.ndarray(float32), [batch_size, 3], each ray direction.
-      viewdirs: jnp.ndarray(float32), [batch_size, 3], the viewing direction for
-        each ray. This is only used if NDC rays are used, as otherwise
-        `directions` is equal to viewdirs.
-      num_coarse_samples: int, the number of samples for coarse nerf.
-      num_fine_samples: int, the number of samples for fine nerf.
-      use_viewdirs: bool, use viewdirs as a condition.
-      near: float, near clip.
-      far: float, far clip.
-      noise_std: float, std dev of noise added to regularize sigma output.
-      net_depth: int, the depth of the first part of MLP.
-      net_width: int, the width of the first part of MLP.
-      net_depth_condition: int, the depth of the second part of MLP.
-      net_width_condition: int, the width of the second part of MLP.
-      net_activation: function, the activation function used within the MLP.
-      skip_layer: int, add a skip connection to the output vector of every
-        skip_layer layers.
-      num_rgb_channels: int, the number of RGB channels.
-      num_sigma_channels: int, the number of density channels.
+      rays: util.Rays, a namedtuple of ray origins, directions, and viewdirs.
       randomized: bool, use randomized stratified sampling.
-      white_bkgd: bool, use white background.
-      deg_point: degree of positional encoding for positions.
-      deg_view: degree of positional encoding for viewdirs.
-      lindisp: bool, sampling linearly in disparity rather than depth if true.
-      rgb_activation: function, the activation used to generate RGB.
-      sigma_activation: function, the activation used to generate density.
-      legacy_posenc_order: bool, keep the same ordering as the original tf code.
-
     Returns:
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
-    mlp_coarse = model_utils.MLP(
-        net_depth=self.net_depth,
-        net_width=self.net_width,
-        net_depth_condition=self.net_depth_condition,
-        net_width_condition=self.net_width_condition,
-        net_activation=self.net_activation,
-        skip_layer=self.skip_layer)
-    mlp_fine = model_utils.MLP(
-        net_depth=self.net_depth,
-        net_width=self.net_width,
-        net_depth_condition=self.net_depth_condition,
-        net_width_condition=self.net_width_condition,
-        net_activation=self.net_activation,
-        skip_layer=self.skip_layer)
-    mlp_head = model_utils.MLP_head(
-        net_depth=self.net_depth // 2,
-        net_width=self.net_width,
-        net_depth_condition=self.net_depth_condition,
-        net_width_condition=self.net_width_condition,
-        net_activation=self.net_activation)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
-    z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
-                                                    self.num_coarse_samples, self.near,
-                                                    self.far, randomized, self.lindisp)
-    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
+    z_vals, samples = model_utils.sample_along_rays(
+        key,
+        rays.origins,
+        rays.directions,
+        self.num_coarse_samples,
+        self.near,
+        self.far,
+        randomized,
+        self.lindisp,
+    )
+    samples_enc = model_utils.posenc(
+        samples,
+        self.min_deg_point,
+        self.max_deg_point,
+        self.legacy_posenc_order,
+    )
+
+    # Construct the "coarse" MLP.
+    coarse_mlp = model_utils.MLP(
+        net_depth=self.net_depth,
+        net_width=self.net_width,
+        net_depth_condition=self.net_depth_condition,
+        net_width_condition=self.net_width_condition,
+        net_activation=self.net_activation,
+        skip_layer=self.skip_layer,
+        num_rgb_channels=self.num_rgb_channels,
+        num_sigma_channels=self.num_sigma_channels)
+
     # Point attribute predictions
-    viewdirs_enc = model_utils.posenc(          
+    if self.use_viewdirs:
+      viewdirs_enc = model_utils.posenc(
           rays.viewdirs,
           0,
           self.deg_view,
-          self.legacy_posenc_order)
-    feature_coarse = mlp_coarse(samples_enc)
-
-    raw_rgb, raw_sigma = mlp_head(feature_coarse, viewdirs_enc)
+          self.legacy_posenc_order,
+      )
+      raw_rgb, raw_sigma = coarse_mlp(samples_enc, viewdirs_enc)
+    else:
+      raw_rgb, raw_sigma = coarse_mlp(samples_enc)
+    # Add noises to regularize the density predictions if needed
     key, rng_0 = random.split(rng_0)
-    raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
-                                               randomized)
+    raw_sigma = model_utils.add_gaussian_noise(
+        key,
+        raw_sigma,
+        self.noise_std,
+        randomized,
+    )
     rgb = self.rgb_activation(raw_rgb)
     sigma = self.sigma_activation(raw_sigma)
     # Volumetric rendering.
@@ -149,10 +132,14 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if self.num_fine_samples > 0:
-      z_vals_coarse = z_vals
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
+
+      z_vals_coarse = z_vals
+      rgb_coarse = rgb
+      sigma_coarse = sigma
+
       key, rng_1 = random.split(rng_1)
-      z_vals, samples = model_utils.sample_pdf_nocoarse(
+      z_vals_fine, samples = model_utils.sample_pdf(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
@@ -162,30 +149,45 @@ class NerfModel(nn.Module):
           self.num_fine_samples + self.num_coarse_samples,
           randomized,
       )
-      samples_enc = model_utils.posenc(          
+      samples_enc = model_utils.posenc(
           samples,
           self.min_deg_point,
           self.max_deg_point,
           self.legacy_posenc_order,
       )
-      feature_fine = mlp_fine(samples_enc)
-      
-      ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
-      feature_conbined = jnp.take_along_axis(jnp.concatenate([feature_fine, feature_coarse], axis=-2), ind[Ellipsis, None], axis=-2)
-      z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), ind, axis=-1)
-      
-      #feature_conbined = feature_fine
-      raw_rgb, raw_sigma = mlp_head(feature_conbined, viewdirs_enc)
+
+      feature_coarse = coarse_mlp(samples_enc, viewdirs_enc, feature_only=True)
+
+      # Construct the "fine" MLP.
+      fine_mlp = model_utils.MLP(
+          net_depth=self.net_depth,
+          net_width=self.net_width,
+          net_depth_condition=self.net_depth_condition,
+          net_width_condition=self.net_width_condition,
+          net_activation=self.net_activation,
+          skip_layer=self.skip_layer,
+          num_rgb_channels=self.num_rgb_channels,
+          num_sigma_channels=self.num_sigma_channels)
+
+      if self.use_viewdirs:
+        raw_rgb, raw_sigma = fine_mlp(samples_enc, viewdirs_enc, feature_coarse=feature_coarse)
+      else:
+        raw_rgb, raw_sigma = fine_mlp(samples_enc)
       key, rng_1 = random.split(rng_1)
-      raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
-                                                 randomized)
+      raw_sigma = model_utils.add_gaussian_noise(
+          key,
+          raw_sigma,
+          self.noise_std,
+          randomized,
+      )
       rgb = self.rgb_activation(raw_rgb)
       sigma = self.sigma_activation(raw_sigma)
+
 
       comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
           rgb,
           sigma,
-          z_vals,
+          z_vals_fine,
           rays.directions,
           white_bkgd=self.white_bkgd,
       )

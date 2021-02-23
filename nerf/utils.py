@@ -148,7 +148,7 @@ def define_flags():
 
   flags.DEFINE_integer("max_steps", 500000,
                        "the number of optimization steps.")
-  flags.DEFINE_integer("save_every", 10000,
+  flags.DEFINE_integer("save_every", 50000,
                        "the number of steps to save a checkpoint.")
   flags.DEFINE_integer("print_every", 100,
                        "the number of steps between reports to tensorboard.")
