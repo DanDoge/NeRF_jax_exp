@@ -152,14 +152,14 @@ class NerfModel(nn.Module):
       z_vals_coarse = z_vals
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
-      z_vals, samples = model_utils.sample_pdf_nocoarse(
+      z_vals, samples = model_utils.sample_pdf(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
           rays.origins,
           rays.directions,
           z_vals,
-          self.num_fine_samples + self.num_coarse_samples,
+          self.num_fine_samples,# + self.num_coarse_samples,
           randomized,
       )
       samples_enc = model_utils.posenc(          
@@ -170,11 +170,11 @@ class NerfModel(nn.Module):
       )
       feature_fine = mlp_fine(samples_enc)
       
-      ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
-      feature_conbined = jnp.take_along_axis(jnp.concatenate([feature_fine, feature_coarse], axis=-2), ind[Ellipsis, None], axis=-2)
-      z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), ind, axis=-1)
+      #ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
+      #feature_conbined = jnp.take_along_axis(jnp.concatenate([feature_fine, feature_coarse], axis=-2), ind[Ellipsis, None], axis=-2)
+      #z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), ind, axis=-1)
       
-      #feature_conbined = feature_fine
+      feature_conbined = feature_fine
       raw_rgb, raw_sigma = mlp_head(feature_conbined, viewdirs_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
