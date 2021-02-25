@@ -50,6 +50,8 @@ class MLP(nn.Module):
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
+      if i == 0 and condition is not None:
+        x = jnp.concatenate([x, condition.reshape([-1, condition.shape[-1]])], axis=-1)
       if i % self.skip_layer == 0 and i > 0:
           x = jnp.concatenate([x, inputs], axis=-1)
     x = jnp.concatenate([x, inputs], axis=-1)

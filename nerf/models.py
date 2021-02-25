@@ -168,7 +168,8 @@ class NerfModel(nn.Module):
           self.max_deg_point,
           self.legacy_posenc_order,
       )
-      feature_fine = mlp_fine(samples_enc)
+      feature_coarse_reference = mlp_coarse(samples_enc)
+      feature_fine = mlp_fine(samples_enc, feature_coarse_reference)
       
       #ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
       #feature_conbined = jnp.take_along_axis(jnp.concatenate([feature_fine, feature_coarse], axis=-2), ind[Ellipsis, None], axis=-2)
