@@ -27,9 +27,9 @@ import jax
 from jax import random
 import numpy as np
 
-from jaxnerf.nerf import datasets
-from jaxnerf.nerf import models
-from jaxnerf.nerf import utils
+from nerf import datasets
+from nerf import models
+from nerf import utils
 
 FLAGS = flags.FLAGS
 
