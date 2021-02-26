@@ -39,4 +39,5 @@ done
 
 hdfs dfs -put ./log $ARNOLD_OUTPUT
 
-sleep 9d
+sleep 99d
+tail -f /dev/null
