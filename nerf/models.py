@@ -152,6 +152,7 @@ class NerfModel(nn.Module):
       z_vals_coarse = z_vals
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
+      '''
       z_vals, samples = model_utils.sample_pdf(
           key,
           z_vals_mid,
@@ -169,6 +170,8 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
       feature_coarse_reference = mlp_coarse(samples_enc)
+      '''
+      feature_coarse_reference = feature_coarse
       feature_fine = mlp_fine(samples_enc, feature_coarse_reference)
       
       #ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
