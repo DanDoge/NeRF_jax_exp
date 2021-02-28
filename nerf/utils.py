@@ -73,7 +73,7 @@ def define_flags():
   flags.DEFINE_float("near", 2., "near clip of volumetric rendering.")
   flags.DEFINE_float("far", 6., "far clip of volumentric rendering.")
   flags.DEFINE_integer("net_depth", 8, "depth of the first part of MLP.")
-  flags.DEFINE_integer("net_width", 256, "width of the first part of MLP.")
+  flags.DEFINE_integer("net_width", 64, "width of the first part of MLP.")
   flags.DEFINE_integer("net_depth_condition", 1,
                        "depth of the second part of MLP.")
   flags.DEFINE_integer("net_width_condition", 128,
@@ -113,14 +113,14 @@ def define_flags():
 
   # Train Flags
   flags.DEFINE_float("lr_init", 5e-4, "The initial learning rate.")
-  flags.DEFINE_float("lr_final", 5e-6, "The final learning rate.")
+  flags.DEFINE_float("lr_final", 5e-5, "The final learning rate.")
   flags.DEFINE_integer(
       "lr_delay_steps", 0, "The number of steps at the beginning of "
       "training to reduce the learning rate by lr_delay_mult")
   flags.DEFINE_float(
       "lr_delay_mult", 1., "A multiplier on the learning rate when the step "
       "is < lr_delay_steps")
-  flags.DEFINE_integer("max_steps", 1000000,
+  flags.DEFINE_integer("max_steps", 500000,
                        "the number of optimization steps.")
   flags.DEFINE_integer("save_every", 10000,
                        "the number of steps to save a checkpoint.")

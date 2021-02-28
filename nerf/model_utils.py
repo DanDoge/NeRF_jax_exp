@@ -85,7 +85,14 @@ class MLP(nn.Module):
       x = net_activation(x)
       if i % skip_layer == 0 and i > 0:
         x = jnp.concatenate([x, inputs], axis=-1)
-    raw_sigma = dense_layer(x, num_sigma_channels).reshape(
+
+    feature_q = dense_layer(x, net_width).reshape([-1, num_samples, net_width])
+    feature_k = dense_layer(x, net_width).reshape([-1, num_samples, net_width])
+    feature_v = dense_layer(x, net_width).reshape([-1, num_samples, net_width])
+    mix_weight = jax.nn.softmax(jnp.matmul(feature_q, jnp.transpose(feature_k, (0, 2, 1))) / 16.)
+    raw_sigma = jnp.matmul(mix_weight, feature_v).reshape([-1, net_width])
+
+    raw_sigma = dense_layer(raw_sigma, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
       # Output of the first part of MLP.
