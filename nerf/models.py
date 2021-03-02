@@ -126,14 +126,14 @@ class NerfModel(nn.Module):
       sigma_coarse = sigma
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
-      z_vals_fine, samples, feature_weighted = model_utils.sample_pdf_nocoarse(
+      z_vals_fine, samples, feature_weighted = model_utils.sample_pdf(
           key,
           z_vals_mid,
           weights[Ellipsis, 1:-1],
           origins,
           directions,
           z_vals_coarse,
-          num_fine_samples + num_coarse_samples,
+          num_fine_samples,
           randomized,
           feature_coarse, 
       )
@@ -150,10 +150,10 @@ class NerfModel(nn.Module):
       rgb = rgb_activation(raw_rgb)
       sigma = sigma_activation(raw_sigma)
 
-      ind = jnp.argsort(jnp.concatenate([z_vals_coarse, z_vals_fine], axis=-1), axis=-1)
-      rgb = jnp.take_along_axis(jnp.concatenate([rgb_coarse, rgb], axis=-2), ind[Ellipsis, None], axis=-2)
-      sigma = jnp.take_along_axis(jnp.concatenate([sigma_coarse, sigma], axis=-2), ind[Ellipsis, None], axis=-2)
-      z_vals_fine = jnp.take_along_axis(jnp.concatenate([z_vals_coarse, z_vals_fine], axis=-1), ind, axis=-1)
+      #ind = jnp.argsort(jnp.concatenate([z_vals_coarse, z_vals_fine], axis=-1), axis=-1)
+      #rgb = jnp.take_along_axis(jnp.concatenate([rgb_coarse, rgb], axis=-2), ind[Ellipsis, None], axis=-2)
+      #sigma = jnp.take_along_axis(jnp.concatenate([sigma_coarse, sigma], axis=-2), ind[Ellipsis, None], axis=-2)
+      #z_vals_fine = jnp.take_along_axis(jnp.concatenate([z_vals_coarse, z_vals_fine], axis=-1), ind, axis=-1)
 
       comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
           rgb,

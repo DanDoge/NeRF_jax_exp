@@ -77,6 +77,8 @@ class MLP(nn.Module):
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
+    if feature_coarse is None:
+      x = x[Ellipsis, :(feature_dim // 2)]
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
 
@@ -89,8 +91,11 @@ class MLP(nn.Module):
           feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
           x = jnp.concatenate([x, feature_coarse], axis=-1)
       if i % skip_layer == 0 and i > 0:
-        x_bkup = x.reshape([-1, num_samples, net_width])
-        x = jnp.concatenate([x, inputs], axis=-1)
+        if feature_coarse is None:
+          x = jnp.concatenate([x, inputs[Ellipsis, :(feature_dim // 2)]], axis=-1)
+        else:
+          x = jnp.concatenate([x, inputs], axis=-1)
+    x_bkup = x.reshape([-1, num_samples, net_width])
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
@@ -343,7 +348,7 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
   z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
                                      randomized)
 
-  mix_weight = jnp.exp(-32 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
+  mix_weight = jnp.exp(-64 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
   mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
   feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
 
