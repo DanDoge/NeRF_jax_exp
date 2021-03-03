@@ -77,8 +77,6 @@ class MLP(nn.Module):
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
-    if feature_coarse is None:
-      x = x[Ellipsis, :(feature_dim // 2)]
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
 
@@ -91,11 +89,10 @@ class MLP(nn.Module):
           feature_coarse = feature_coarse.reshape([-1, feature_coarse.shape[-1]])
           x = jnp.concatenate([x, feature_coarse], axis=-1)
       if i % skip_layer == 0 and i > 0:
-        if feature_coarse is None:
-          x = jnp.concatenate([x, inputs[Ellipsis, :(feature_dim // 2)]], axis=-1)
-        else:
-          x = jnp.concatenate([x, inputs], axis=-1)
-    x_bkup = x.reshape([-1, num_samples, net_width])
+        x_bkup_4 = dense_layer(x, net_width // 2).reshape([-1, num_samples, net_width // 2])
+        x = jnp.concatenate([x, inputs], axis=-1)
+    x_bkup_8 = dense_layer(x, net_width // 2).reshape([-1, num_samples, net_width // 2])
+    x_bkup = jnp.concatenate([x_bkup_4, x_bkup_8], axis=-1)
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
