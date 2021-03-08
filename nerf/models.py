@@ -75,7 +75,7 @@ class NerfModel(nn.Module):
     """
     mlp_fn_c = functools.partial(
         model_utils.MLP,
-        net_depth=net_depth // 2,
+        net_depth=net_depth // 2 * 3,
         net_width=net_width,
         net_depth_condition=net_depth_condition,
         net_width_condition=net_width_condition,
@@ -85,7 +85,7 @@ class NerfModel(nn.Module):
         num_sigma_channels=num_sigma_channels)
     mlp_fn_f = functools.partial(
         model_utils.MLP,
-        net_depth=net_depth // 2 * 3,
+        net_depth=net_depth // 2,
         net_width=net_width,
         net_depth_condition=net_depth_condition,
         net_width_condition=net_width_condition,
