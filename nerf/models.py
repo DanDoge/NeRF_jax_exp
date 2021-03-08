@@ -73,9 +73,19 @@ class NerfModel(nn.Module):
     Returns:
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
-    mlp_fn = functools.partial(
+    mlp_fn_c = functools.partial(
         model_utils.MLP,
-        net_depth=net_depth,
+        net_depth=net_depth // 2,
+        net_width=net_width,
+        net_depth_condition=net_depth_condition,
+        net_width_condition=net_width_condition,
+        net_activation=net_activation,
+        skip_layer=skip_layer,
+        num_rgb_channels=num_rgb_channels,
+        num_sigma_channels=num_sigma_channels)
+    mlp_fn_f = functools.partial(
+        model_utils.MLP,
+        net_depth=net_depth // 2 * 3,
         net_width=net_width,
         net_depth_condition=net_depth_condition,
         net_width_condition=net_width_condition,
@@ -94,9 +104,9 @@ class NerfModel(nn.Module):
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
           deg_view, legacy_posenc_order)
-      raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+      raw_rgb, raw_sigma = mlp_fn_c(samples_enc, viewdirs_enc)
     else:
-      raw_rgb, raw_sigma = mlp_fn(samples_enc)
+      raw_rgb, raw_sigma = mlp_fn_c(samples_enc)
     # Add noises to regularize the density predictions if needed
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
@@ -130,9 +140,9 @@ class NerfModel(nn.Module):
       )
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+        raw_rgb, raw_sigma = mlp_fn_f(samples_enc, viewdirs_enc)
       else:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc)
+        raw_rgb, raw_sigma = mlp_fn_f(samples_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
                                                  randomized)
