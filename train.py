@@ -81,7 +81,7 @@ def train_step(rng_key, state, batch, lr):
     else:
       loss_c = 0.
       psnr_c = 0.
-    return loss + 0.25 * loss_c, (new_model_state, stats)
+    return loss + loss_c, (new_model_state, stats)
 
   step = state.step
   optimizer = state.optimizer
