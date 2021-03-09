@@ -27,7 +27,7 @@ import jax.numpy as jnp
 
 
 
-class MLP(nn.Module):
+class MLP_body(nn.Module):
   """A simple MLP."""
   net_depth: int = 6  # The depth of the first part of MLP.
   net_width: int = 256  # The width of the first part of MLP.
@@ -64,6 +64,7 @@ class MLP_head(nn.Module):
   net_width: int = 256  # The width of the first part of MLP.
   net_depth_condition: int = 1  # The depth of the second part of MLP.
   net_width_condition: int = 128  # The width of the second part of MLP.
+  skip_layer: int = 3  # The layer to add skip layers to.
   net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
@@ -80,6 +81,8 @@ class MLP_head(nn.Module):
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
+      if i % self.skip_layer == 0 and i > 0:
+        x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])
     if condition is not None:
