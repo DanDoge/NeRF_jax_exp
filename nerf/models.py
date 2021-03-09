@@ -111,7 +111,7 @@ class NerfModel(nn.Module):
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
     mlp_body = model_utils.MLP_body(
-        net_depth=4,
+        net_depth=8,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
