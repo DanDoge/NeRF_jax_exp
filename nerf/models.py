@@ -96,27 +96,20 @@ class NerfModel(nn.Module):
     Returns:
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
-    mlp_coarse = model_utils.MLP_head(
+    mlp_coarse = model_utils.MLP(
         net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
-    mlp_fine = model_utils.MLP_head(
+    mlp_fine = model_utils.MLP(
         net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
-    mlp_body = model_utils.MLP_body(
-        net_depth=8,
-        net_width=self.net_width,
-        net_depth_condition=self.net_depth_condition,
-        net_width_condition=self.net_width_condition,
-        skip_layer=4, 
-        net_activation=self.net_activation)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
@@ -129,9 +122,8 @@ class NerfModel(nn.Module):
           0,
           self.deg_view,
           self.legacy_posenc_order)
-    feature_coarse = mlp_body(samples_enc)
 
-    raw_rgb, raw_sigma = mlp_coarse(feature_coarse, viewdirs_enc)
+    raw_rgb, raw_sigma, feature = mlp_coarse(samples_enc, None, viewdirs_enc)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -148,44 +140,43 @@ class NerfModel(nn.Module):
     ret = [
         (comp_rgb, disp, acc),
     ]
-    # Hierarchical sampling based on coarse predictions
-    if self.num_fine_samples > 0:
-      z_vals_coarse = z_vals
-      z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
-      key, rng_1 = random.split(rng_1)
 
-      z_vals, samples = model_utils.sample_pdf(
-          key,
-          z_vals_mid,
-          weights[Ellipsis, 1:-1],
-          rays.origins,
-          rays.directions,
-          z_vals,
-          self.num_fine_samples,
-          randomized,
-      )
-      samples_enc = model_utils.posenc(          
-          samples,
-          self.min_deg_point,
-          self.max_deg_point,
-          self.legacy_posenc_order,
-      )
-      feature_fine = mlp_body(samples_enc)
-      raw_rgb, raw_sigma = mlp_fine(feature_fine, viewdirs_enc)
-      key, rng_1 = random.split(rng_1)
-      raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
-                                                 randomized)
-      rgb = self.rgb_activation(raw_rgb)
-      sigma = self.sigma_activation(raw_sigma)
+    z_vals_coarse = z_vals
+    z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
+    key, rng_1 = random.split(rng_1)
 
-      comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
-          rgb,
-          sigma,
-          z_vals,
-          rays.directions,
-          white_bkgd=self.white_bkgd,
-      )
-      ret.append((comp_rgb, disp, acc))
+    z_vals, samples, feature = model_utils.sample_pdf(
+        key,
+        z_vals_mid,
+        weights[Ellipsis, 1:-1],
+        rays.origins,
+        rays.directions,
+        z_vals,
+        self.num_coarse_samples,
+        randomized,
+        feature, 
+    )
+    samples_enc = model_utils.posenc(          
+        samples,
+        self.min_deg_point,
+        self.max_deg_point,
+        self.legacy_posenc_order,
+    )
+    raw_rgb, raw_sigma, feature = mlp_fine(samples_enc, feature, viewdirs_enc)
+    key, rng_1 = random.split(rng_1)
+    raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
+                                                randomized)
+    rgb = self.rgb_activation(raw_rgb)
+    sigma = self.sigma_activation(raw_sigma)
+
+    comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
+        rgb,
+        sigma,
+        z_vals,
+        rays.directions,
+        white_bkgd=self.white_bkgd,
+    )
+    ret.append((comp_rgb, disp, acc))
     return ret
 
 

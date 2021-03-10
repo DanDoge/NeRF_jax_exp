@@ -90,8 +90,8 @@ def define_flags():
   flags.DEFINE_string("model", "nerf", "name of model to use.")
   flags.DEFINE_float("near", 2., "near clip of volumetric rendering.")
   flags.DEFINE_float("far", 6., "far clip of volumentric rendering.")
-  flags.DEFINE_integer("net_depth", 4, "depth of the first part of MLP.")
-  flags.DEFINE_integer("net_width", 64, "width of the first part of MLP.")
+  flags.DEFINE_integer("net_depth", 8, "depth of the first part of MLP.")
+  flags.DEFINE_integer("net_width", 256, "width of the first part of MLP.")
   flags.DEFINE_integer("net_depth_condition", 1,
                        "depth of the second part of MLP.")
   flags.DEFINE_integer("net_width_condition", 128,
@@ -111,9 +111,9 @@ def define_flags():
   flags.DEFINE_integer("deg_view", 4,
                        "Degree of positional encoding for viewdirs.")
   flags.DEFINE_integer(
-      "num_coarse_samples", 64,
+      "num_coarse_samples", 192,
       "the number of samples on each ray for the coarse model.")
-  flags.DEFINE_integer("num_fine_samples", 128,
+  flags.DEFINE_integer("num_fine_samples", -1,
                        "the number of samples on each ray for the fine model.")
   flags.DEFINE_bool("use_viewdirs", True, "use view directions as a condition.")
   flags.DEFINE_float(

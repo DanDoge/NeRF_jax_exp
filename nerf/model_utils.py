@@ -25,40 +25,7 @@ from jax import lax
 from jax import random
 import jax.numpy as jnp
 
-
-
-class MLP_body(nn.Module):
-  """A simple MLP."""
-  net_depth: int = 6  # The depth of the first part of MLP.
-  net_width: int = 256  # The width of the first part of MLP.
-  net_depth_condition: int = 1  # The depth of the second part of MLP.
-  net_width_condition: int = 128  # The width of the second part of MLP.
-  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
-  skip_layer: int = 3  # The layer to add skip layers to.
-  num_rgb_channels: int = 3  # The number of RGB channels.
-  num_sigma_channels: int = 1  # The number of sigma channels.
-
-  @nn.compact
-  def __call__(self, x, condition=None):
-    feature_dim = x.shape[-1]
-    num_samples = x.shape[1]
-    x = x.reshape([-1, feature_dim])
-    dense_layer = functools.partial(
-        nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
-
-    inputs = x
-    for i in range(self.net_depth):
-      x = dense_layer(self.net_width)(x)
-      x = self.net_activation(x)
-      if i == 0 and condition is not None:
-        x = jnp.concatenate([x, condition.reshape([-1, condition.shape[-1]])], axis=-1)
-      if i % self.skip_layer == 0 and i > 0:
-          x = jnp.concatenate([x, inputs], axis=-1)
-    x = jnp.concatenate([x, inputs], axis=-1)
-    x = x.reshape([-1, num_samples, x.shape[-1]])
-    return x
-
-class MLP_head(nn.Module):
+class MLP(nn.Module):
   """A simple MLP."""
   net_depth: int = 8  # The depth of the first part of MLP.
   net_width: int = 256  # The width of the first part of MLP.
@@ -70,33 +37,37 @@ class MLP_head(nn.Module):
   num_sigma_channels: int = 1  # The number of sigma channels.
 
   @nn.compact
-  def __call__(self, x, condition=None):
+  def __call__(self, x, feature=None, view=None):
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
+    if feature is not None:
+      feature = feature.reshape([-1, feature.shape[-1]])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
 
-    inputs = x
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      if i % self.skip_layer == 0 and i > 0:
-        x = jnp.concatenate([x, inputs], axis=-1)
+      if i == 0 and feature is not None:
+        x = jnp.concatenate([x, feature], axis=-1)
+    feature = x
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])
-    if condition is not None:
+    if view is not None:
       bottleneck = dense_layer(self.net_width)(x)
-      condition = jnp.tile(condition[:, None, :], (1, num_samples, 1))
-      condition = condition.reshape([-1, condition.shape[-1]])
-      x = jnp.concatenate([bottleneck, condition], axis=-1)
+      view = jnp.tile(view[:, None, :], (1, num_samples, 1))
+      view = view.reshape([-1, view.shape[-1]])
+      x = jnp.concatenate([bottleneck, view], axis=-1)
       for i in range(self.net_depth_condition):
         x = dense_layer(self.net_width_condition)(x)
         x = self.net_activation(x)
     raw_rgb = dense_layer(self.num_rgb_channels)(x).reshape(
         [-1, num_samples, self.num_rgb_channels])
 
-    return raw_rgb, raw_sigma
+    feature = feature.reshape([-1, num_samples, self.net_width])
+
+    return raw_rgb, raw_sigma, feature
 
 
 def cast_rays(z_vals, origins, directions):
@@ -268,31 +239,22 @@ def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):
   # Prevent gradient from backprop-ing through `samples`.
   return lax.stop_gradient(samples)
 
-
 def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
-               randomized):
-  """Hierarchical sampling.
-  Args:
-    key: jnp.ndarray(float32), [2,], random number generator.
-    bins: jnp.ndarray(float32), [batch_size, num_bins + 1].
-    weights: jnp.ndarray(float32), [batch_size, num_bins].
-    origins: jnp.ndarray(float32), [batch_size, 3], ray origins.
-    directions: jnp.ndarray(float32), [batch_size, 3], ray directions.
-    z_vals: jnp.ndarray(float32), [batch_size, num_coarse_samples].
-    num_samples: int, the number of samples.
-    randomized: bool, use randomized samples.
-  Returns:
-    z_vals: jnp.ndarray(float32),
-      [batch_size, num_coarse_samples + num_fine_samples].
-    points: jnp.ndarray(float32),
-      [batch_size, num_coarse_samples + num_fine_samples, 3].
-  """
+               randomized, feature_coarse):
   z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
                                      randomized)
+
+  mix_weight = jnp.exp(-64 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
+  mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
+  feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
+
   # Compute united z_vals and sample points
-  z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+  ind = jnp.argsort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+  z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_samples], axis=-1), ind, axis=-1)
+  feature = jnp.take_along_axis(jnp.concatenate([feature_coarse, feature_weighted], axis=-2), ind[Ellipsis, None], axis=-2)
   coords = cast_rays(z_vals, origins, directions)
-  return z_vals, coords
+  return z_vals, coords, feature
+
 
 def sample_pdf_nocoarse(key, bins, weights, origins, directions, z_vals, num_samples,
                randomized):
