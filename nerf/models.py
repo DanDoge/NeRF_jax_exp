@@ -97,21 +97,21 @@ class NerfModel(nn.Module):
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
     mlp_coarse = model_utils.MLP_head(
-        net_depth=self.net_depth,
+        net_depth=self.net_depth // 2,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
     mlp_fine = model_utils.MLP_head(
-        net_depth=self.net_depth,
+        net_depth=self.net_depth // 2 * 3,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
     mlp_body = model_utils.MLP_body(
-        net_depth=8,
+        net_depth=4,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
