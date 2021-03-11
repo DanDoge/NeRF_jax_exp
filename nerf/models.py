@@ -117,6 +117,13 @@ class NerfModel(nn.Module):
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
+    mlp_fine3 = model_utils.MLP(
+        net_depth=self.net_depth,
+        net_width=self.net_width,
+        net_depth_condition=self.net_depth_condition,
+        net_width_condition=self.net_width_condition,
+        net_activation=self.net_activation,
+        skip_layer=self.skip_layer)
     key, rng_0 = random.split(rng_0)
     coarse_render = random.uniform(key)
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
@@ -200,14 +207,49 @@ class NerfModel(nn.Module):
         self.max_deg_point,
         self.legacy_posenc_order,
     )
-    raw_rgb, raw_sigma, feature = mlp_fine(samples_enc, feature, viewdirs_enc)
+    raw_rgb, raw_sigma, feature = mlp_fine2(samples_enc, feature, viewdirs_enc)
     key, rng_1 = random.split(rng_1)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                 randomized)
     rgb = self.rgb_activation(raw_rgb)
     sigma = self.sigma_activation(raw_sigma)
 
-    comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
+    comp_rgb_fine2, disp_fine2, acc_fine2, weights = model_utils.volumetric_rendering(
+        rgb,
+        sigma,
+        z_vals,
+        rays.directions,
+        white_bkgd=self.white_bkgd,
+    )
+
+    z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
+    key, rng_1 = random.split(rng_1)
+
+    z_vals, samples, feature = model_utils.sample_pdf(
+        key,
+        z_vals_mid,
+        weights[Ellipsis, 1:-1],
+        rays.origins,
+        rays.directions,
+        z_vals,
+        self.num_coarse_samples,
+        randomized,
+        feature, 
+    )
+    samples_enc = model_utils.posenc(          
+        samples,
+        self.min_deg_point,
+        self.max_deg_point,
+        self.legacy_posenc_order,
+    )
+    raw_rgb, raw_sigma, feature = mlp_fine3(samples_enc, feature, viewdirs_enc)
+    key, rng_1 = random.split(rng_1)
+    raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
+                                                randomized)
+    rgb = self.rgb_activation(raw_rgb)
+    sigma = self.sigma_activation(raw_sigma)
+
+    comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
         rgb,
         sigma,
         z_vals,
@@ -215,9 +257,9 @@ class NerfModel(nn.Module):
         white_bkgd=self.white_bkgd,
     )
     ret = [
-      (comp_rgb_coarse * (coarse_render <= 0.5) + comp_rgb_fine * (coarse_render > 0.5), 
-      disp_coarse * (coarse_render <= 0.5) + disp_fine * (coarse_render > 0.5), 
-      acc_coarse * (coarse_render <= 0.5) + acc_fine * (coarse_render > 0.5))
+      (comp_rgb_coarse * (coarse_render <= 0.33) + comp_rgb_fine * ((coarse_render > 0.33) & (coarse_render <= 0.67)) + comp_rgb_fine2 * (coarse_render > 0.67), 
+      disp_coarse * (coarse_render <= 0.33) + disp_fine * ((coarse_render > 0.33) & (coarse_render <= 0.67)) + disp_fine2 * (coarse_render > 0.67), 
+      acc_coarse * (coarse_render <= 0.33) + acc_fine * ((coarse_render > 0.33) & (coarse_render <= 0.67)) + acc_fine2 * (coarse_render > 0.67))
     ]
     ret.append((comp_rgb, disp, acc))
     return ret
