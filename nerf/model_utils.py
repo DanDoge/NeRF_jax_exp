@@ -323,7 +323,7 @@ def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):
 
 
 def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
-               randomized, feature_coarse):
+               randomized, feature_coarse, sigma):
   """Hierarchical sampling.
 
   Args:
@@ -345,7 +345,7 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
   z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
                                      randomized)
 
-  mix_weight = jnp.exp(-64 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
+  mix_weight = jnp.exp(-1. / sigma[Ellipsis, None, None] * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
   mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
   feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
 
