@@ -207,7 +207,7 @@ def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   disp = jnp.where((disp > 0) & (disp < inv_eps) & (acc > eps), disp, inv_eps)
   if white_bkgd:
     comp_rgb = comp_rgb + (1. - acc[Ellipsis, None])
-  return comp_rgb, disp, acc, weights
+  return comp_rgb, depth, acc, weights
 
 
 def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):

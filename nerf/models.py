@@ -97,14 +97,14 @@ class NerfModel(nn.Module):
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
     mlp_coarse = model_utils.MLP_head(
-        net_depth=self.net_depth // 2,
+        net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
     mlp_fine = model_utils.MLP_head(
-        net_depth=self.net_depth // 2 * 3,
+        net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
@@ -138,7 +138,7 @@ class NerfModel(nn.Module):
     rgb = self.rgb_activation(raw_rgb)
     sigma = self.sigma_activation(raw_sigma)
     # Volumetric rendering.
-    comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
+    comp_rgb, depth, acc, weights = model_utils.volumetric_rendering(
         rgb,
         sigma,
         z_vals,
@@ -146,7 +146,7 @@ class NerfModel(nn.Module):
         white_bkgd=self.white_bkgd,
     )
     ret = [
-        (comp_rgb, disp, acc),
+        (comp_rgb, depth, acc),
     ]
     # Hierarchical sampling based on coarse predictions
     if self.num_fine_samples > 0:
@@ -154,6 +154,7 @@ class NerfModel(nn.Module):
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
 
+      '''
       z_vals, samples = model_utils.sample_pdf(
           key,
           z_vals_mid,
@@ -164,6 +165,23 @@ class NerfModel(nn.Module):
           self.num_fine_samples,
           randomized,
       )
+      '''
+
+      mu = depth / (weights.sum(axis=-1) + 1e-5)
+      sigma = ((z_vals - depth[Ellipsis, None]) * (z_vals - depth[Ellipsis, None]) * weights).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
+      sigma = jnp.clip(sigma, 1e-6, 1e5)
+      noise = random.normal(key, shape=list(z_vals.shape[:-1]) + [self.num_fine_samples])
+      tmp = random.uniform(key)
+      z_samples = noise * jnp.sqrt(sigma)[Ellipsis, None] + mu[Ellipsis, None]
+      z_samples = jnp.clip(z_samples, 0., 1.)
+
+      z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+      samples = rays.origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * rays.directions[Ellipsis, None, :]
+
+
+
+
+
       samples_enc = model_utils.posenc(          
           samples,
           self.min_deg_point,
