@@ -73,7 +73,17 @@ class NerfModel(nn.Module):
     Returns:
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
-    mlp_fn = functools.partial(
+    mlp_fn_c = functools.partial(
+        model_utils.MLP,
+        net_depth=net_depth,
+        net_width=net_width //2,
+        net_depth_condition=net_depth_condition,
+        net_width_condition=net_width_condition //2,
+        net_activation=net_activation,
+        skip_layer=skip_layer,
+        num_rgb_channels=num_rgb_channels,
+        num_sigma_channels=num_sigma_channels)
+    mlp_fn_f = functools.partial(
         model_utils.MLP,
         net_depth=net_depth,
         net_width=net_width,
@@ -94,9 +104,9 @@ class NerfModel(nn.Module):
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
           deg_view, legacy_posenc_order)
-      raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+      raw_rgb, raw_sigma = mlp_fn_c(samples_enc, viewdirs_enc)
     else:
-      raw_rgb, raw_sigma = mlp_fn(samples_enc)
+      raw_rgb, raw_sigma = mlp_fn_c(samples_enc)
     # Add noises to regularize the density predictions if needed
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
@@ -116,20 +126,6 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if num_fine_samples > 0:
-      '''
-      z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
-      key, rng_1 = random.split(rng_1)
-      z_vals, samples = model_utils.sample_pdf(
-          key,
-          z_vals_mid,
-          weights[Ellipsis, 1:-1],
-          origins,
-          directions,
-          z_vals,
-          num_fine_samples,
-          randomized,
-      )
-      '''
       key, rng_1 = random.split(rng_1)
       z_vals, samples = model_utils.sample_along_rays(key, origins, directions,
                                                       num_coarse_samples, near,
@@ -137,10 +133,10 @@ class NerfModel(nn.Module):
 
       mu = depth / (weights.sum(axis=-1) + 1e-5)
       sigma = ((z_vals - depth[Ellipsis, None]) * (z_vals - depth[Ellipsis, None]) * weights).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
-      sigma = jnp.clip(sigma, 0., 1e5) + 1e-6
+      sigma = jnp.clip(sigma, 1e-6, 1e5)
       noise = random.normal(key, shape=list(z_vals.shape[:-1]) + [num_fine_samples])
       tmp = random.uniform(key)
-      z_samples = noise * (jnp.sqrt(sigma)[Ellipsis, None] * (tmp < 0.7) + 1e-2 * (tmp >= 0.7)) +  + mu[Ellipsis, None]
+      z_samples = noise * jnp.sqrt(sigma)[Ellipsis, None] + mu[Ellipsis, None]
       z_samples = jnp.clip(z_samples, 0., 1.)
 
       z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
@@ -148,9 +144,9 @@ class NerfModel(nn.Module):
 
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc, viewdirs_enc)
+        raw_rgb, raw_sigma = mlp_fn_f(samples_enc, viewdirs_enc)
       else:
-        raw_rgb, raw_sigma = mlp_fn(samples_enc)
+        raw_rgb, raw_sigma = mlp_fn_f(samples_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, noise_std,
                                                  randomized)
