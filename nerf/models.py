@@ -132,11 +132,12 @@ class NerfModel(nn.Module):
                                                       far, randomized, lindisp)
 
       mu = depth / (weights.sum(axis=-1) + 1e-5)
-      sigma = ((z_vals - depth[Ellipsis, None]) * (z_vals - depth[Ellipsis, None]) * weights).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
-      sigma = jnp.clip(sigma, 1e-6, 1e5)
+      #sigma = ((z_vals - depth[Ellipsis, None]) * (z_vals - depth[Ellipsis, None]) * weights).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
+      #sigma = jnp.clip(sigma, 1e-6, 1e5)
       noise = random.normal(key, shape=list(z_vals.shape[:-1]) + [num_fine_samples])
       tmp = random.uniform(key)
-      z_samples = noise * jnp.sqrt(sigma)[Ellipsis, None] + mu[Ellipsis, None]
+      #z_samples = noise * jnp.sqrt(sigma)[Ellipsis, None] + mu[Ellipsis, None]
+      z_samples = noise * 1e-2 + mu[Ellipsis, None]
       z_samples = jnp.clip(z_samples, 0., 1.)
 
       z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
