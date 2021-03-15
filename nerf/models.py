@@ -18,6 +18,7 @@
 import functools
 from flax import nn
 from jax import random
+from jax import lax
 import jax.numpy as jnp
 
 from nerf import model_utils
@@ -126,6 +127,11 @@ class NerfModel(nn.Module):
     ]
     # Hierarchical sampling based on coarse predictions
     if num_fine_samples > 0:
+
+      mu = (weights * z_vals).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
+      sigma_depth = lax.stop_gradient(((z_vals - mu[Ellipsis, None]) * (z_vals - mu[Ellipsis, None]) * weights).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5))
+
+
       z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
       key, rng_1 = random.split(rng_1)
       z_vals, samples = model_utils.sample_pdf(
@@ -138,6 +144,9 @@ class NerfModel(nn.Module):
           num_fine_samples,
           randomized,
       )
+
+
+
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
         raw_rgb, raw_sigma = mlp_fn_f(samples_enc, viewdirs_enc)
@@ -155,7 +164,7 @@ class NerfModel(nn.Module):
           directions,
           white_bkgd=white_bkgd,
       )
-      ret.append((comp_rgb, disp, acc))
+      ret.append((comp_rgb, disp, acc, sigma_depth))
     return ret
 
 

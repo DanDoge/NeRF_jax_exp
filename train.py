@@ -67,9 +67,9 @@ def train_step(rng_key, state, batch, lr):
           "ret should contain either 1 set of output (coarse only), or 2 sets"
           "of output (coarse as ret[0] and fine as ret[1]).")
     # The main prediction is always at the end of the ret list.
-    rgb, unused_disp, unused_acc = ret[-1]
-    loss = ((rgb - batch["pixels"][Ellipsis, :3])**2).mean()
-    psnr = utils.compute_psnr(loss)
+    rgb, unused_disp, unused_acc, sigma = ret[-1]
+    loss = (sigma.squeeze()[Ellipsis, None] * ((rgb - batch["pixels"][Ellipsis, :3])**2)).mean() / (sigma.mean() + 1e-5)
+    psnr = utils.compute_psnr(((rgb - batch["pixels"][Ellipsis, :3])**2).mean())
     stats = [utils.Stats(loss=loss, psnr=psnr)]
     if len(ret) > 1:
       # If there are both coarse and fine predictions, we compuate the loss for
