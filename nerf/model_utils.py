@@ -49,9 +49,11 @@ class MLP(nn.Module):
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      if i == 0 and feature is not None:
-        x = jnp.concatenate([x, feature], axis=-1)
-    feature = x
+      #if i == 0 and feature is not None:
+      #  x = jnp.concatenate([x, feature], axis=-1)
+    if feature is not None:
+      x = x + feature
+    feature_ret = x
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])
     if view is not None:
@@ -65,9 +67,9 @@ class MLP(nn.Module):
     raw_rgb = dense_layer(self.num_rgb_channels)(x).reshape(
         [-1, num_samples, self.num_rgb_channels])
 
-    feature = feature.reshape([-1, num_samples, self.net_width])
+    feature_ret = feature_ret.reshape([-1, num_samples, self.net_width])
 
-    return raw_rgb, raw_sigma, feature
+    return raw_rgb, raw_sigma, feature_ret
 
 
 def cast_rays(z_vals, origins, directions):
@@ -249,9 +251,9 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
   feature_weighted = jnp.matmul(mix_weight_norm, feature_coarse)
 
   # Compute united z_vals and sample points
-  ind = jnp.argsort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+  ind = jnp.argsort(jnp.concatenate([z_vals[Ellipsis, ::2], z_samples], axis=-1), axis=-1)
   z_vals = jnp.take_along_axis(jnp.concatenate([z_vals[Ellipsis, ::2], z_samples], axis=-1), ind, axis=-1)
-  feature = jnp.take_along_axis(jnp.concatenate([feature_coarse, feature_weighted], axis=-2), ind[Ellipsis, None], axis=-2)
+  feature = jnp.take_along_axis(jnp.concatenate([feature_coarse[Ellipsis, ::2, :], feature_weighted], axis=-2), ind[Ellipsis, None], axis=-2)
   coords = cast_rays(z_vals, origins, directions)
   return z_vals, coords, feature
 
