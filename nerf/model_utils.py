@@ -241,7 +241,7 @@ def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):
 
 def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
                randomized, feature_coarse):
-  z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
+  z_samples = piecewise_constant_pdf(key, bins, weights, num_samples // 2,
                                      randomized)
 
   mix_weight = jnp.exp(-64 * (z_samples[Ellipsis, None] - z_vals[:, None, :]) * (z_samples[Ellipsis, None] - z_vals[:, None, :]))
@@ -250,7 +250,7 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
 
   # Compute united z_vals and sample points
   ind = jnp.argsort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
-  z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_samples], axis=-1), ind, axis=-1)
+  z_vals = jnp.take_along_axis(jnp.concatenate([z_vals[Ellipsis, ::2], z_samples], axis=-1), ind, axis=-1)
   feature = jnp.take_along_axis(jnp.concatenate([feature_coarse, feature_weighted], axis=-2), ind[Ellipsis, None], axis=-2)
   coords = cast_rays(z_vals, origins, directions)
   return z_vals, coords, feature
