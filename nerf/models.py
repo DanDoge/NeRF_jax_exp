@@ -81,8 +81,7 @@ class NerfModel(nn.Module):
         net_width_condition=net_width_condition,
         net_activation=net_activation,
         skip_layer=skip_layer,
-        num_rgb_channels=num_rgb_channels,
-        num_sigma_channels=num_sigma_channels)
+        num_output_channels=num_sigma_channels)
     mlp_fn_f = functools.partial(
         model_utils.MLP,
         net_depth=net_depth,
@@ -91,8 +90,16 @@ class NerfModel(nn.Module):
         net_width_condition=net_width_condition,
         net_activation=net_activation,
         skip_layer=skip_layer,
-        num_rgb_channels=num_rgb_channels,
-        num_sigma_channels=num_sigma_channels)
+        num_output_channels=num_sigma_channels)
+    mlp_fn_rgb = functools.partial(
+        model_utils.MLP,
+        net_depth=net_depth // 3 * 2,
+        net_width=net_width,
+        net_depth_condition=net_depth_condition,
+        net_width_condition=net_width_condition,
+        net_activation=net_activation,
+        skip_layer=skip_layer,
+        num_output_channels=num_rgb_channels)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, origins, directions,
@@ -104,7 +111,8 @@ class NerfModel(nn.Module):
       viewdirs_enc = model_utils.posenc(
           viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True),
           deg_view, legacy_posenc_order)
-      raw_rgb, raw_sigma = mlp_fn_c(samples_enc, viewdirs_enc)
+      raw_sigma = mlp_fn_c(samples_enc)
+      raw_rgb = mlp_fn_rgb(samples_enc, viewdirs_enc)
     else:
       raw_rgb, raw_sigma = mlp_fn_c(samples_enc)
     # Add noises to regularize the density predictions if needed
@@ -140,7 +148,8 @@ class NerfModel(nn.Module):
       )
       samples_enc = model_utils.posenc(samples, deg_point, legacy_posenc_order)
       if use_viewdirs:
-        raw_rgb, raw_sigma = mlp_fn_f(samples_enc, viewdirs_enc)
+        raw_sigma = mlp_fn_f(samples_enc)
+        raw_rgb = mlp_fn_rgb(samples_enc, viewdirs_enc)
       else:
         raw_rgb, raw_sigma = mlp_fn_f(samples_enc)
       key, rng_1 = random.split(rng_1)

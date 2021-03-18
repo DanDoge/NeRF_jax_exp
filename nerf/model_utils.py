@@ -46,33 +46,8 @@ class MLP(nn.Module):
             net_width_condition=128,
             net_activation=nn.relu,
             skip_layer=2,
-            num_rgb_channels=3,
-            num_sigma_channels=1):
-    """Multi-layer perception for nerf.
+            num_output_channels=1):
 
-    Args:
-      x: jnp.ndarray(float32), [batch, num_samples, feature], points.
-      condition: jnp.ndarray(float32), [batch, feature], if not None, this
-        variable will be part of the input to the second part of the MLP
-        concatenated with the output vector of the first part of the MLP. If
-        None, only the first part of the MLP will be used with input x. In the
-        original paper, this variable is the view direction.
-      net_depth: int, the depth of the first part of MLP.
-      net_width: int, the width of the first part of MLP.
-      net_depth_condition: int, the depth of the second part of MLP.
-      net_width_condition: int, the width of the second part of MLP.
-      net_activation: function, the activation function used in the MLP.
-      skip_layer: int, add a skip connection to the output vector of every
-        skip_layer layers.
-      num_rgb_channels: int, the number of RGB channels.
-      num_sigma_channels: int, the number of density channels.
-
-    Returns:
-      raw_rgb: jnp.ndarray(float32), with a shape of
-           [batch, num_samples, num_rgb_channels].
-      raw_sigma: jnp.ndarray(float32), with a shape of
-           [batch, num_samples, num_sigma_channels].
-    """
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
@@ -85,26 +60,17 @@ class MLP(nn.Module):
       x = net_activation(x)
       if i % skip_layer == 0 and i > 0:
         x = jnp.concatenate([x, inputs], axis=-1)
-    raw_sigma = dense_layer(x, num_sigma_channels).reshape(
-        [-1, num_samples, num_sigma_channels])
     if condition is not None:
-      # Output of the first part of MLP.
       bottleneck = dense_layer(x, net_width)
-      # Broadcast condition from [batch, feature] to
-      # [batch, num_samples, feature] since all the samples along the same ray
-      # has the same viewdir.
       condition = jnp.tile(condition[:, None, :], (1, num_samples, 1))
-      # Collapse the [batch, num_samples, feature] tensor to
-      # [batch * num_samples, feature] so that it can be feed into nn.Dense.
       condition = condition.reshape([-1, condition.shape[-1]])
       x = jnp.concatenate([bottleneck, condition], axis=-1)
-      # Here use 1 extra layer to align with the original nerf model.
       for i in range(net_depth_condition):
         x = dense_layer(x, net_width_condition)
         x = net_activation(x)
-    raw_rgb = dense_layer(x, num_rgb_channels).reshape(
-        [-1, num_samples, num_rgb_channels])
-    return raw_rgb, raw_sigma
+    raw_output = dense_layer(x, num_output_channels).reshape(
+        [-1, num_samples, num_output_channels])
+    return raw_output
 
 
 def sample_along_rays(key, origins, directions, num_samples, near, far,
