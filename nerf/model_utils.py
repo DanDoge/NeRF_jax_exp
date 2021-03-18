@@ -45,14 +45,17 @@ class MLP(nn.Module):
       feature = feature.reshape([-1, feature.shape[-1]])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    norm_layer = functools.partial(nn.BatchNorm,
+                      use_running_average=True,
+                      momentum=0.9,
+                      epsilon=1e-5,)
 
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      #if i == 0 and feature is not None:
-      #  x = jnp.concatenate([x, feature], axis=-1)
-    if feature is not None:
-      x = x + feature
+      if i == 0 and feature is not None:
+        feature = norm_layer()(feature)
+        x = jnp.concatenate([x, feature], axis=-1)
     feature_ret = x
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])

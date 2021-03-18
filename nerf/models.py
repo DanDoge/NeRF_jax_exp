@@ -129,7 +129,7 @@ class NerfModel(nn.Module):
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
-    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 8, self.legacy_posenc_order)
+    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
           rays.viewdirs,
@@ -169,7 +169,7 @@ class NerfModel(nn.Module):
     samples_enc = model_utils.posenc(          
         samples,
         self.min_deg_point,
-        self.max_deg_point // 4,
+        self.max_deg_point,
         self.legacy_posenc_order,
     )
     raw_rgb, raw_sigma, feature = mlp_fine(samples_enc, feature, viewdirs_enc)
@@ -204,7 +204,7 @@ class NerfModel(nn.Module):
     samples_enc = model_utils.posenc(          
         samples,
         self.min_deg_point,
-        self.max_deg_point // 2,
+        self.max_deg_point,
         self.legacy_posenc_order,
     )
     raw_rgb, raw_sigma, feature = mlp_fine2(samples_enc, feature, viewdirs_enc)
