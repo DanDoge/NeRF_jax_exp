@@ -76,6 +76,12 @@ class MLP_head(nn.Module):
     x = x.reshape([-1, feature_dim])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    norm_layer = functools.partial(nn.BatchNorm,
+                      use_running_average=True,
+                      momentum=0.9,
+                      epsilon=1e-5,)
+
+    x = norm_layer()(x)
 
     inputs = x
     for i in range(self.net_depth):
