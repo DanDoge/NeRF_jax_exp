@@ -54,7 +54,6 @@ class MLP_body(nn.Module):
         x = jnp.concatenate([x, condition.reshape([-1, condition.shape[-1]])], axis=-1)
       if i % self.skip_layer == 0 and i > 0:
           x = jnp.concatenate([x, inputs], axis=-1)
-    x = jnp.concatenate([x, inputs], axis=-1)
     x = x.reshape([-1, num_samples, x.shape[-1]])
     return x
 
@@ -70,10 +69,11 @@ class MLP_head(nn.Module):
   num_sigma_channels: int = 1  # The number of sigma channels.
 
   @nn.compact
-  def __call__(self, x, condition=None):
+  def __call__(self, x, sample_enc, condition=None):
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
+    sample_enc = sample_enc.reshape([-1, sample_enc.shape[-1]])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
     norm_layer = functools.partial(nn.BatchNorm,
@@ -83,11 +83,11 @@ class MLP_head(nn.Module):
 
     x = norm_layer()(x)
 
-    inputs = x
+    inputs = sample_enc
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      if i % self.skip_layer == 0 and i > 0:
+      if i % self.skip_layer == 0:
         x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])

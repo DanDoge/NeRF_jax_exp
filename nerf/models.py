@@ -104,7 +104,7 @@ class NerfModel(nn.Module):
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
     mlp_fine = model_utils.MLP_head(
-        net_depth=self.net_depth // 2 * 3,
+        net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
@@ -122,6 +122,7 @@ class NerfModel(nn.Module):
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
+    samples_enc_lf = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 2, self.legacy_posenc_order)
     samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
@@ -129,9 +130,9 @@ class NerfModel(nn.Module):
           0,
           self.deg_view,
           self.legacy_posenc_order)
-    feature_coarse = mlp_body(samples_enc)
+    feature_coarse = mlp_body(samples_enc_lf)
 
-    raw_rgb, raw_sigma = mlp_coarse(feature_coarse, viewdirs_enc)
+    raw_rgb, raw_sigma = mlp_coarse(feature_coarse, samples_enc, viewdirs_enc)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -167,31 +168,19 @@ class NerfModel(nn.Module):
       )
       
 
-      '''
-      mu = depth / (weights.sum(axis=-1) + 1e-5)
-      sigma = ((z_vals - depth[Ellipsis, None]) * (z_vals - depth[Ellipsis, None]) * weights).sum(axis=-1) / (weights.sum(axis=-1) + 1e-5)
-      sigma = jnp.clip(sigma, 1e-6, 1e5)
-      noise = random.normal(key, shape=list(z_vals.shape[:-1]) + [self.num_fine_samples])
-      tmp = random.uniform(key)
-      z_samples = noise * jnp.sqrt(sigma)[Ellipsis, None] + mu[Ellipsis, None]
-      z_samples = jnp.clip(z_samples, 0., 1.)
-
-      z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
-      samples = rays.origins[Ellipsis, None, :] + z_vals[Ellipsis, None] * rays.directions[Ellipsis, None, :]
-      '''
-
-
-
-
-
       samples_enc = model_utils.posenc(          
           samples,
           self.min_deg_point,
           self.max_deg_point,
           self.legacy_posenc_order,
       )
-      feature_fine = mlp_body(samples_enc)
-      raw_rgb, raw_sigma = mlp_fine(feature_fine, viewdirs_enc)
+      def interpolate(f, zc, zf):
+        mix_weight = jnp.exp(-64. * (zf[Ellipsis, None] - zc[:, None, :]) * (zf[Ellipsis, None] - zc[:, None, :]))
+        mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
+        return jnp.matmul(mix_weight_norm, f)
+
+      feature_fine = interpolate(feature_coarse, z_vals_coarse, z_vals)
+      raw_rgb, raw_sigma = mlp_fine(feature_fine, samples_enc, viewdirs_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)
