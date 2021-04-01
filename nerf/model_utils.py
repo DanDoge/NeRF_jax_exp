@@ -87,8 +87,9 @@ class MLP_head(nn.Module):
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      if i % self.skip_layer == 0:
+      if i % self.skip_layer == 0 or i == 0:
         x = jnp.concatenate([x, inputs], axis=-1)
+    x_bkup = x.reshape([-1, num_samples, x.shape[-1]])
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])
     if condition is not None:
@@ -296,7 +297,8 @@ def sample_pdf(key, bins, weights, origins, directions, z_vals, num_samples,
   z_samples = piecewise_constant_pdf(key, bins, weights, num_samples,
                                      randomized)
   # Compute united z_vals and sample points
-  z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+  #z_vals = jnp.sort(jnp.concatenate([z_vals, z_samples], axis=-1), axis=-1)
+  z_vals = jnp.sort(z_samples, axis=-1)
   coords = cast_rays(z_vals, origins, directions)
   return z_vals, coords
 
