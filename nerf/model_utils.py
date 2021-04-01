@@ -87,7 +87,7 @@ class MLP_head(nn.Module):
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      if i % self.skip_layer == 0 or i == 0:
+      if i % self.skip_layer == 0:
         x = jnp.concatenate([x, inputs], axis=-1)
     x_bkup = x.reshape([-1, num_samples, x.shape[-1]])
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
