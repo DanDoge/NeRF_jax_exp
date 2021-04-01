@@ -104,7 +104,14 @@ class NerfModel(nn.Module):
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
     mlp_fine = model_utils.MLP_head(
-        net_depth=self.net_depth // 2 * 3,
+        net_depth=self.net_depth // 2,
+        net_width=self.net_width,
+        net_depth_condition=self.net_depth_condition,
+        net_width_condition=self.net_width_condition,
+        net_activation=self.net_activation,
+        skip_layer=self.skip_layer)
+    mlp_finer = model_utils.MLP_head(
+        net_depth=self.net_depth // 2,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
@@ -181,6 +188,52 @@ class NerfModel(nn.Module):
 
       feature_fine = interpolate(feature_coarse, z_vals_coarse, z_vals)
       raw_rgb, raw_sigma = mlp_fine(feature_fine, samples_enc, viewdirs_enc)
+      key, rng_1 = random.split(rng_1)
+      raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
+                                                 randomized)
+      rgb = self.rgb_activation(raw_rgb)
+      sigma = self.sigma_activation(raw_sigma)
+
+      comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
+          rgb,
+          sigma,
+          z_vals,
+          rays.directions,
+          white_bkgd=self.white_bkgd,
+      )
+      ret.append((comp_rgb, disp, acc))
+
+    if self.num_fine_samples > 0:
+      z_vals_fine = z_vals
+      z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
+      key, rng_1 = random.split(rng_1)
+
+      
+      z_vals, samples = model_utils.sample_pdf(
+          key,
+          z_vals_mid,
+          weights[Ellipsis, 1:-1],
+          rays.origins,
+          rays.directions,
+          z_vals,
+          self.num_fine_samples,
+          randomized,
+      )
+      
+
+      samples_enc = model_utils.posenc(          
+          samples,
+          self.min_deg_point,
+          self.max_deg_point,
+          self.legacy_posenc_order,
+      )
+      def interpolate(f, zc, zf):
+        mix_weight = jnp.exp(-64. * (zf[Ellipsis, None] - zc[:, None, :]) * (zf[Ellipsis, None] - zc[:, None, :]))
+        mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
+        return jnp.matmul(mix_weight_norm, f)
+
+      feature_finer = interpolate(feature_coarse, z_vals_coarse, z_vals)
+      raw_rgb, raw_sigma = mlp_finer(feature_finer, samples_enc, viewdirs_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)

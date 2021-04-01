@@ -58,7 +58,7 @@ def train_step(model, rng, state, batch, lr):
   def loss_fn(variables):
     rays = batch["rays"]
     ret = model.apply(variables, key_0, key_1, rays, FLAGS.randomized)
-    if len(ret) not in (1, 2):
+    if len(ret) not in (1, 2, 3):
       raise ValueError(
           "ret should contain either 1 set of output (coarse only), or 2 sets"
           "of output (coarse as ret[0] and fine as ret[1]).")
@@ -71,9 +71,12 @@ def train_step(model, rng, state, batch, lr):
       # the coarse prediction (ret[0]) as well.
       rgb_c, unused_disp_c, unused_acc_c = ret[0]
       loss_c = ((rgb_c - batch["pixels"][Ellipsis, :3])**2).mean()
+      rgb_f, unused_disp_f, unused_acc_f = ret[1]
+      loss_f = ((rgb_f - batch["pixels"][Ellipsis, :3])**2).mean()
       psnr_c = utils.compute_psnr(loss_c)
     else:
       loss_c = 0.
+      loss_f = 0.
       psnr_c = 0.
 
     def tree_sum_fn(fn):
@@ -85,8 +88,8 @@ def train_step(model, rng, state, batch, lr):
         tree_sum_fn(lambda z: jnp.prod(jnp.array(z.shape))))
 
     stats = utils.Stats(
-        loss=loss, psnr=psnr, loss_c=loss_c, psnr_c=psnr_c, weight_l2=weight_l2)
-    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2, stats
+        loss=loss, psnr=psnr, loss_c=loss_c, loss_f=loss_f, psnr_c=psnr_c, weight_l2=weight_l2)
+    return loss + loss_c + loss_f + FLAGS.weight_decay_mult * weight_l2, stats
 
   (_, stats), grad = (
       jax.value_and_grad(loss_fn, has_aux=True)(state.optimizer.target))
@@ -201,6 +204,7 @@ def main(unused_argv):
         summary_writer.scalar("train_loss", stats.loss[0], step)
         summary_writer.scalar("train_psnr", stats.psnr[0], step)
         summary_writer.scalar("train_loss_coarse", stats.loss_c[0], step)
+        summary_writer.scalar("train_loss_fine", stats.loss_f[0], step)
         summary_writer.scalar("train_psnr_coarse", stats.psnr_c[0], step)
         summary_writer.scalar("weight_l2", stats.weight_l2[0], step)
         avg_loss = np.mean(np.concatenate([s.loss for s in stats_trace]))
