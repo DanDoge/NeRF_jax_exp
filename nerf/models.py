@@ -124,12 +124,13 @@ class NerfModel(nn.Module):
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
         skip_layer=self.skip_layer)
+    ret = []
     key, rng_0 = random.split(rng_0)
     coarse_render = random.uniform(key)
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
-    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
+    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 4, self.legacy_posenc_order)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
           rays.viewdirs,
@@ -151,6 +152,7 @@ class NerfModel(nn.Module):
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
+    ret.append((comp_rgb_coarse, disp_coarse, acc_coarse))
 
     z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
     key, rng_1 = random.split(rng_1)
@@ -169,7 +171,7 @@ class NerfModel(nn.Module):
     samples_enc = model_utils.posenc(          
         samples,
         self.min_deg_point,
-        self.max_deg_point,
+        self.max_deg_point // 2,
         self.legacy_posenc_order,
     )
     raw_rgb, raw_sigma, feature = mlp_fine(samples_enc, feature, viewdirs_enc)
@@ -186,6 +188,7 @@ class NerfModel(nn.Module):
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
+    ret.append((comp_rgb_fine, disp_fine, acc_fine))
 
     z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
     key, rng_1 = random.split(rng_1)
@@ -221,6 +224,7 @@ class NerfModel(nn.Module):
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
+    ret.append((comp_rgb_fine2, disp_fine2, acc_fine2))
 
     z_vals_mid = .5 * (z_vals[Ellipsis, 1:] + z_vals[Ellipsis, :-1])
     key, rng_1 = random.split(rng_1)
@@ -256,11 +260,6 @@ class NerfModel(nn.Module):
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
-    ret = [
-      (comp_rgb_coarse * (coarse_render <= 0.33) + comp_rgb_fine * ((coarse_render > 0.33) & (coarse_render <= 0.67)) + comp_rgb_fine2 * (coarse_render > 0.67), 
-      disp_coarse * (coarse_render <= 0.33) + disp_fine * ((coarse_render > 0.33) & (coarse_render <= 0.67)) + disp_fine2 * (coarse_render > 0.67), 
-      acc_coarse * (coarse_render <= 0.33) + acc_fine * ((coarse_render > 0.33) & (coarse_render <= 0.67)) + acc_fine2 * (coarse_render > 0.67))
-    ]
     ret.append((comp_rgb, disp, acc))
     return ret
 

@@ -42,6 +42,8 @@ class Stats:
   loss: float
   psnr: float
   loss_c: float
+  loss_f: float
+  loss_f2: float
   psnr_c: float
   weight_l2: float
 
