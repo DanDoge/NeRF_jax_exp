@@ -1,10 +1,10 @@
 #!/bin/bash
 
 cd /opt/tiger/NeRF_jax
-hdfs dfs -get hdfs://haruna/home/byte_arnold_lq/huangdaoji/data/
+hdfs dfs -get hdfs://haruna/home/byte_arnold_lq/huangdaoji/data_syn/
 
-CONFIG=llff
-DATA_ROOT=./data
+CONFIG=blender
+DATA_ROOT=./data_syn
 ROOT_DIR=./log/"$CONFIG"
 if [ $CONFIG == "llff" ]
 then
