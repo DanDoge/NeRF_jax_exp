@@ -172,9 +172,9 @@ class NerfModel(nn.Module):
       #feature_coarse_reference = mlp_coarse(samples_enc)
       #feature_coarse_reference = feature_coarse
 
-      mix_weight = jnp.exp(-128 * (z_vals[Ellipsis, None] - z_vals_coarse[:, None, :]) * (z_vals[Ellipsis, None] - z_vals_coarse[:, None, :]))
+      mix_weight = jnp.exp(-64 * (z_vals[Ellipsis, None] - z_vals_coarse[:, None, :]) * (z_vals[Ellipsis, None] - z_vals_coarse[:, None, :]))
       mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
-      feature_coarse_reference = jnp.matmul(mix_weight_norm, feature_coarse)
+      feature_coarse_reference = jnp.matmul(mix_weight_norm, feature_coarse[Ellipsis, :self.net_width])
 
       feature_fine = mlp_fine(samples_enc, feature_coarse_reference)
       
