@@ -52,7 +52,7 @@ class MLP(nn.Module):
 
     x_bkup = x
     if condition is not None:
-      condition = norm_layer()(condition.reshape([-1, condition.shape[-1]]))
+      condition = condition.reshape([-1, condition.shape[-1]])
       x = jnp.concatenate([x, condition], axis=-1)
 
     inputs = x
@@ -61,6 +61,7 @@ class MLP(nn.Module):
       x = self.net_activation(x)
       if i % self.skip_layer == 0 and i > 0:
           x = jnp.concatenate([x, inputs], axis=-1)
+    x = norm_layer()(x)
     x = jnp.concatenate([x, x_bkup], axis=-1)
     x = x.reshape([-1, num_samples, x.shape[-1]])
     return x
