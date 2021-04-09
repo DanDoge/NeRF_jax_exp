@@ -175,7 +175,7 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
       def interpolate(f, zc, zf):
-        mix_weight = jnp.exp(-64. * (zf[Ellipsis, None] - zc[:, None, :]) * (zf[Ellipsis, None] - zc[:, None, :]))
+        mix_weight = jnp.exp(-128. * (zf[Ellipsis, None] - zc[:, None, :]) * (zf[Ellipsis, None] - zc[:, None, :]))
         mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
         return jnp.matmul(mix_weight_norm, f)
 
