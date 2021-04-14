@@ -15,10 +15,12 @@
 
 # Lint as: python3
 """Different model implementation plus a general port for all the models."""
+import functools
 from typing import Any, Callable
 from flax import linen as nn
 from jax import random
 import jax.numpy as jnp
+import jax
 
 from nerf import model_utils
 from nerf import utils
@@ -128,9 +130,17 @@ class NerfModel(nn.Module):
           0,
           self.deg_view,
           self.legacy_posenc_order)
-    feature_coarse = mlp_coarse(samples_enc)
 
-    raw_rgb, raw_sigma = mlp_head(feature_coarse, viewdirs_enc)
+
+    dense_layer = functools.partial(
+        nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    feature_coarse = dense_layer(self.net_width)(samples_enc)
+    feature_coarse = mlp_coarse(feature_coarse) / 4 + feature_coarse
+    feature_coarse = mlp_coarse(feature_coarse) / 4 + feature_coarse
+    feature_coarse = mlp_coarse(feature_coarse) / 4 + feature_coarse
+    feature_coarse = mlp_coarse(feature_coarse) / 4 + feature_coarse
+
+    raw_rgb, raw_sigma = mlp_head(jnp.concatenate([feature_coarse, samples_enc], axis=-1), viewdirs_enc)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -169,20 +179,16 @@ class NerfModel(nn.Module):
           self.max_deg_point,
           self.legacy_posenc_order,
       )
-      #feature_coarse_reference = mlp_coarse(samples_enc)
-      #feature_coarse_reference = feature_coarse
 
-      mix_weight = jnp.exp(-64 * (z_vals[Ellipsis, None] - z_vals_coarse[:, None, :]) * (z_vals[Ellipsis, None] - z_vals_coarse[:, None, :]))
-      mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
-      feature_coarse_reference = jnp.matmul(mix_weight_norm, feature_coarse[Ellipsis, :self.net_width])
-
-      feature_fine = mlp_fine(samples_enc, feature_coarse_reference)
+      dense_layer = functools.partial(
+          nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+      feature_fine = dense_layer(self.net_width)(samples_enc)
+      feature_fine = mlp_fine(feature_fine) / 4 + feature_fine
+      feature_fine = mlp_fine(feature_fine) / 4 + feature_fine
+      feature_fine = mlp_fine(feature_fine) / 4 + feature_fine
+      feature_fine = mlp_fine(feature_fine) / 4 + feature_fine
       
-      #ind = jnp.argsort(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), axis=-1)
-      #feature_conbined = jnp.take_along_axis(jnp.concatenate([feature_fine, feature_coarse], axis=-2), ind[Ellipsis, None], axis=-2)
-      #z_vals = jnp.take_along_axis(jnp.concatenate([z_vals, z_vals_coarse], axis=-1), ind, axis=-1)
-      
-      feature_conbined = feature_fine
+      feature_conbined = jnp.concatenate([feature_fine, samples_enc], axis=-1)
       raw_rgb, raw_sigma = mlp_head(feature_conbined, viewdirs_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,

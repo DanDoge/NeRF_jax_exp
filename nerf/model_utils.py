@@ -62,7 +62,6 @@ class MLP(nn.Module):
       if i % self.skip_layer == 0 and i > 0:
           x = jnp.concatenate([x, inputs], axis=-1)
     x = norm_layer()(x)
-    x = jnp.concatenate([x, x_bkup], axis=-1)
     x = x.reshape([-1, num_samples, x.shape[-1]])
     return x
 
