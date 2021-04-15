@@ -96,33 +96,29 @@ class NerfModel(nn.Module):
     Returns:
       ret: list, [(rgb_coarse, disp_coarse, acc_coarse), (rgb, disp, acc)]
     """
-    mlp_coarse = model_utils.MLP_head(
-        net_depth=self.net_depth // 2,
+    mlp_coarse = model_utils.full_MLP(
+        net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
-        skip_layer=self.skip_layer)
-    mlp_fine = model_utils.MLP_head(
-        net_depth=self.net_depth // 2 * 3,
+        skip_layer=self.skip_layer,
+        num_rgb_channels=self.num_rgb_channels,
+        num_sigma_channels=self.num_sigma_channels)
+    mlp_fine = model_utils.full_MLP(
+        net_depth=self.net_depth,
         net_width=self.net_width,
         net_depth_condition=self.net_depth_condition,
         net_width_condition=self.net_width_condition,
         net_activation=self.net_activation,
-        skip_layer=self.skip_layer)
-    mlp_body = model_utils.MLP_body(
-        net_depth=4,
-        net_width=self.net_width,
-        net_depth_condition=self.net_depth_condition,
-        net_width_condition=self.net_width_condition,
-        skip_layer=4, 
-        net_activation=self.net_activation)
+        skip_layer=self.skip_layer,
+        num_rgb_channels=self.num_rgb_channels,
+        num_sigma_channels=self.num_sigma_channels)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
-    samples_enc_lf = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 2, self.legacy_posenc_order)
     samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
@@ -130,9 +126,8 @@ class NerfModel(nn.Module):
           0,
           self.deg_view,
           self.legacy_posenc_order)
-    feature_coarse = mlp_body(samples_enc_lf)
 
-    raw_rgb, raw_sigma = mlp_coarse(feature_coarse, samples_enc_lf, viewdirs_enc)
+    raw_rgb, raw_sigma = mlp_coarse(samples_enc, viewdirs_enc)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -166,7 +161,6 @@ class NerfModel(nn.Module):
           self.num_fine_samples,
           randomized,
       )
-      
 
       samples_enc = model_utils.posenc(          
           samples,
@@ -174,13 +168,8 @@ class NerfModel(nn.Module):
           self.max_deg_point,
           self.legacy_posenc_order,
       )
-      def interpolate(f, zc, zf):
-        mix_weight = jnp.exp(-128. * (zf[Ellipsis, None] - zc[:, None, :]) * (zf[Ellipsis, None] - zc[:, None, :]))
-        mix_weight_norm = mix_weight / mix_weight.sum(axis=-1)[Ellipsis, None]
-        return jnp.matmul(mix_weight_norm, f)
 
-      feature_fine = interpolate(feature_coarse, z_vals_coarse, z_vals)
-      raw_rgb, raw_sigma = mlp_fine(feature_fine, samples_enc, viewdirs_enc)
+      raw_rgb, raw_sigma = mlp_fine(samples_enc, viewdirs_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)

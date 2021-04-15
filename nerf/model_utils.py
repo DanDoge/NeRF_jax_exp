@@ -27,82 +27,140 @@ import jax.numpy as jnp
 
 
 
-class MLP_body(nn.Module):
-  """A simple MLP."""
-  net_depth: int = 6  # The depth of the first part of MLP.
-  net_width: int = 256  # The width of the first part of MLP.
-  net_depth_condition: int = 1  # The depth of the second part of MLP.
-  net_width_condition: int = 128  # The width of the second part of MLP.
-  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
-  skip_layer: int = 3  # The layer to add skip layers to.
-  num_rgb_channels: int = 3  # The number of RGB channels.
-  num_sigma_channels: int = 1  # The number of sigma channels.
-
-  @nn.compact
-  def __call__(self, x, condition=None):
-    feature_dim = x.shape[-1]
-    num_samples = x.shape[1]
-    x = x.reshape([-1, feature_dim])
-    dense_layer = functools.partial(
-        nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
-
-    inputs = x
-    for i in range(self.net_depth):
-      x = dense_layer(self.net_width)(x)
-      x = self.net_activation(x)
-      if i == 0 and condition is not None:
-        x = jnp.concatenate([x, condition.reshape([-1, condition.shape[-1]])], axis=-1)
-      if i % self.skip_layer == 0 and i > 0:
-          x = jnp.concatenate([x, inputs], axis=-1)
-    x = x.reshape([-1, num_samples, x.shape[-1]])
-    return x
-
-class MLP_head(nn.Module):
+class MLP(nn.Module):
   """A simple MLP."""
   net_depth: int = 8  # The depth of the first part of MLP.
   net_width: int = 256  # The width of the first part of MLP.
   net_depth_condition: int = 1  # The depth of the second part of MLP.
   net_width_condition: int = 128  # The width of the second part of MLP.
-  skip_layer: int = 3  # The layer to add skip layers to.
   net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
+  skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
 
   @nn.compact
-  def __call__(self, x, sample_enc, condition=None):
+  def __call__(self, x, condition=None):
+    """Evaluate the MLP.
+    Args:
+      x: jnp.ndarray(float32), [batch, num_samples, feature], points.
+      condition: jnp.ndarray(float32), [batch, feature], if not None, this
+        variable will be part of the input to the second part of the MLP
+        concatenated with the output vector of the first part of the MLP. If
+        None, only the first part of the MLP will be used with input x. In the
+        original paper, this variable is the view direction.
+    Returns:
+      raw_rgb: jnp.ndarray(float32), with a shape of
+           [batch, num_samples, num_rgb_channels].
+      raw_sigma: jnp.ndarray(float32), with a shape of
+           [batch, num_samples, num_sigma_channels].
+    """
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
-    sample_enc = sample_enc.reshape([-1, sample_enc.shape[-1]])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
-    norm_layer = functools.partial(nn.BatchNorm,
-                      use_running_average=True,
-                      momentum=0.9,
-                      epsilon=1e-5,)
-
-    x = norm_layer()(x)
-
-    inputs = sample_enc
+    inputs = x
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
       x = self.net_activation(x)
-      if i % self.skip_layer == 0:
+      if i % self.skip_layer == 0 and i > 0:
         x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(self.num_sigma_channels)(x).reshape(
         [-1, num_samples, self.num_sigma_channels])
+
     if condition is not None:
+      # Output of the first part of MLP.
       bottleneck = dense_layer(self.net_width)(x)
+      # Broadcast condition from [batch, feature] to
+      # [batch, num_samples, feature] since all the samples along the same ray
+      # have the same viewdir.
       condition = jnp.tile(condition[:, None, :], (1, num_samples, 1))
+      # Collapse the [batch, num_samples, feature] tensor to
+      # [batch * num_samples, feature] so that it can be fed into nn.Dense.
       condition = condition.reshape([-1, condition.shape[-1]])
       x = jnp.concatenate([bottleneck, condition], axis=-1)
+      # Here use 1 extra layer to align with the original nerf model.
       for i in range(self.net_depth_condition):
         x = dense_layer(self.net_width_condition)(x)
         x = self.net_activation(x)
     raw_rgb = dense_layer(self.num_rgb_channels)(x).reshape(
         [-1, num_samples, self.num_rgb_channels])
-
     return raw_rgb, raw_sigma
+
+class full_MLP(nn.Module):
+  net_depth: int = 8  # The depth of the first part of MLP.
+  net_width: int = 256  # The width of the first part of MLP.
+  net_depth_condition: int = 1  # The depth of the second part of MLP.
+  net_width_condition: int = 128  # The width of the second part of MLP.
+  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
+  skip_layer: int = 4  # The layer to add skip layers to.
+  num_rgb_channels: int = 3  # The number of RGB channels.
+  num_sigma_channels: int = 1  # The number of sigma channels.
+
+  @nn.compact
+  def __call__(self, x, condition=None):
+    mlp1 = MLP(
+      net_depth=self.net_depth,
+      net_width=self.net_width // 2,
+      net_depth_condition=self.net_depth_condition,
+      net_width_condition=self.net_width_condition // 2,
+      net_activation=self.net_activation,
+      skip_layer=self.skip_layer,
+      num_rgb_channels=self.num_rgb_channels,
+      num_sigma_channels=self.num_sigma_channels)
+    mlp2 = MLP(
+      net_depth=self.net_depth,
+      net_width=self.net_width // 2,
+      net_depth_condition=self.net_depth_condition,
+      net_width_condition=self.net_width_condition // 2,
+      net_activation=self.net_activation,
+      skip_layer=self.skip_layer,
+      num_rgb_channels=self.num_rgb_channels,
+      num_sigma_channels=self.num_sigma_channels)
+    mlp3 = MLP(
+      net_depth=self.net_depth,
+      net_width=self.net_width // 2,
+      net_depth_condition=self.net_depth_condition,
+      net_width_condition=self.net_width_condition // 2,
+      net_activation=self.net_activation,
+      skip_layer=self.skip_layer,
+      num_rgb_channels=self.num_rgb_channels,
+      num_sigma_channels=self.num_sigma_channels)
+    mlp4 = MLP(
+      net_depth=self.net_depth,
+      net_width=self.net_width // 2,
+      net_depth_condition=self.net_depth_condition,
+      net_width_condition=self.net_width_condition // 2,
+      net_activation=self.net_activation,
+      skip_layer=self.skip_layer,
+      num_rgb_channels=self.num_rgb_channels,
+      num_sigma_channels=self.num_sigma_channels)
+
+    rgb1, sigma1 = mlp1(x, condition)
+    rgb2, sigma2 = mlp2(x, condition)
+    rgb3, sigma3 = mlp3(x, condition)
+    rgb4, sigma4 = mlp4(x, condition)
+
+    dense_layer = functools.partial(
+      nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    prob = nn.softmax(
+      dense_layer(4)(
+        self.net_activation(
+          dense_layer(128)(
+            self.net_activation(
+              dense_layer(128)(
+                x
+              )
+            )
+          )
+        )
+      )
+    )
+    #print(rgb1.shape, prob.shape)
+    rgb = rgb1 * prob[Ellipsis, 0:1] + rgb2 * prob[Ellipsis, 1:2] + rgb3 * prob[Ellipsis, 2:3] + rgb4 * prob[Ellipsis, 3:4]
+    sigma = sigma1 * prob[Ellipsis, 0:1] + sigma2 * prob[Ellipsis, 1:2] + sigma3 * prob[Ellipsis, 2:3] + sigma4 * prob[Ellipsis, 3:4]
+
+    return rgb, sigma
 
 
 def cast_rays(z_vals, origins, directions):
