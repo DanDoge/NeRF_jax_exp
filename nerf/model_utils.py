@@ -18,6 +18,7 @@
 
 import functools
 from typing import Any, Callable
+import math
 
 from flax import linen as nn
 import jax
@@ -96,7 +97,7 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 4
+  num_small_nerf: int = 16
 
   @nn.compact
   def __call__(self, x, condition=None):
@@ -105,9 +106,9 @@ class full_MLP(nn.Module):
       list_nerf.append(
         MLP(
           net_depth=self.net_depth,
-          net_width=self.net_width // 2,
+          net_width=self.net_width // int(math.sqrt(self.num_small_nerf)),
           net_depth_condition=self.net_depth_condition,
-          net_width_condition=self.net_width_condition // 2,
+          net_width_condition=self.net_width_condition // int(math.sqrt(self.num_small_nerf)),
           net_activation=self.net_activation,
           skip_layer=self.skip_layer,
           num_rgb_channels=self.num_rgb_channels,
@@ -125,7 +126,7 @@ class full_MLP(nn.Module):
     dense_layer = functools.partial(
       nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
     prob = nn.softmax(
-      dense_layer(4)(
+      dense_layer(self.num_small_nerf)(
         x
       )
     )
