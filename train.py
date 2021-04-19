@@ -63,14 +63,16 @@ def train_step(model, rng, state, batch, lr):
           "ret should contain either 1 set of output (coarse only), or 2 sets"
           "of output (coarse as ret[0] and fine as ret[1]).")
     # The main prediction is always at the end of the ret list.
-    rgb, unused_disp, unused_acc = ret[-1]
+    rgb, unused_disp, unused_acc, fine_prob = ret[-1]
     loss = ((rgb - batch["pixels"][Ellipsis, :3])**2).mean()
+    loss_prob = (fine_prob * jnp.log(fine_prob + 1e-3)).mean()
     psnr = utils.compute_psnr(loss)
     if len(ret) > 1:
       # If there are both coarse and fine predictions, we compute the loss for
       # the coarse prediction (ret[0]) as well.
-      rgb_c, unused_disp_c, unused_acc_c = ret[0]
+      rgb_c, unused_disp_c, unused_acc_c, coarse_prob = ret[0]
       loss_c = ((rgb_c - batch["pixels"][Ellipsis, :3])**2).mean()
+      loss_prob += (coarse_prob * jnp.log(coarse_prob + 1e-3)).mean()
       psnr_c = utils.compute_psnr(loss_c)
     else:
       loss_c = 0.
@@ -86,7 +88,7 @@ def train_step(model, rng, state, batch, lr):
 
     stats = utils.Stats(
         loss=loss, psnr=psnr, loss_c=loss_c, psnr_c=psnr_c, weight_l2=weight_l2)
-    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2, stats
+    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2 + 0.1 * loss_prob, stats
 
   (_, stats), grad = (
       jax.value_and_grad(loss_fn, has_aux=True)(state.optimizer.target))

@@ -133,7 +133,7 @@ class full_MLP(nn.Module):
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
-    return rgb, sigma
+    return rgb, sigma, prob.reshape([-1, self.num_small_nerf]).mean(axis=1)
 
 
 def cast_rays(z_vals, origins, directions):
