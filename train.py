@@ -40,7 +40,7 @@ utils.define_flags()
 config.parse_flags_with_absl()
 
 
-def train_step(model, rng, state, batch, lr):
+def train_step(model, rng, state, batch, lr, step):
   """One optimization step.
   Args:
     model: The linen model.
@@ -57,7 +57,7 @@ def train_step(model, rng, state, batch, lr):
 
   def loss_fn(variables):
     rays = batch["rays"]
-    ret = model.apply(variables, key_0, key_1, rays, FLAGS.randomized)
+    ret = model.apply(variables, key_0, key_1, rays, FLAGS.randomized, step)
     if len(ret) not in (1, 2):
       raise ValueError(
           "ret should contain either 1 set of output (coarse only), or 2 sets"
@@ -145,7 +145,7 @@ def main(unused_argv):
   train_pstep = jax.pmap(
       functools.partial(train_step, model),
       axis_name="batch",
-      in_axes=(0, 0, 0, None),
+      in_axes=(0, 0, 0, None, None),
       donate_argnums=(2,))
 
   def render_fn(variables, key_0, key_1, rays):
@@ -187,7 +187,7 @@ def main(unused_argv):
       t_loop_start = time.time()
       reset_timer = False
     lr = learning_rate_fn(step)
-    state, stats, keys = train_pstep(keys, state, batch, lr)
+    state, stats, keys = train_pstep(keys, state, batch, lr, step)
     if jax.host_id() == 0:
       stats_trace.append(stats)
     if step % FLAGS.gc_every == 0:
@@ -239,7 +239,8 @@ def main(unused_argv):
           test_case["rays"],
           keys[0],
           FLAGS.dataset == "llff",
-          chunk=FLAGS.chunk)
+          chunk=FLAGS.chunk,
+          step=step,)
 
       # Log eval summaries on host 0.
       if jax.host_id() == 0:

@@ -58,7 +58,7 @@ class NerfModel(nn.Module):
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
 
   @nn.compact
-  def __call__(self, rng_0, rng_1, rays, randomized):
+  def __call__(self, rng_0, rng_1, rays, randomized, step):
     """Nerf Model.
 
     Args:
@@ -122,17 +122,17 @@ class NerfModel(nn.Module):
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
-    samples_enc_lf = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 2, self.legacy_posenc_order)
-    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
+    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order, step)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
           rays.viewdirs,
           0,
           self.deg_view,
-          self.legacy_posenc_order)
-    feature_coarse = mlp_body(samples_enc_lf)
+          self.legacy_posenc_order, 
+          step)
+    feature_coarse = mlp_body(samples_enc)
 
-    raw_rgb, raw_sigma = mlp_coarse(feature_coarse, samples_enc_lf, viewdirs_enc)
+    raw_rgb, raw_sigma = mlp_coarse(feature_coarse, samples_enc, viewdirs_enc)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -173,6 +173,7 @@ class NerfModel(nn.Module):
           self.min_deg_point,
           self.max_deg_point,
           self.legacy_posenc_order,
+          step, 
       )
       def interpolate(f, zc, zf):
         mix_weight = jnp.exp(-128. * (zf[Ellipsis, None] - zc[:, None, :]) * (zf[Ellipsis, None] - zc[:, None, :]))
@@ -260,6 +261,7 @@ def construct_nerf(key, example_batch, args):
       rng_0=key2,
       rng_1=key3,
       rays=utils.namedtuple_map(lambda x: x[0], rays),
-      randomized=args.randomized)
+      randomized=args.randomized, 
+      step=0,)
 
   return model, init_variables
