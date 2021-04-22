@@ -127,14 +127,23 @@ class full_MLP(nn.Module):
       nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
     prob = nn.softmax(
       dense_layer(self.num_small_nerf)(
-        x
+        self.net_activation(
+          dense_layer(128)(
+            self.net_activation(
+              dense_layer(128)(
+                x[Ellipsis, :3]
+              )
+            )
+          )
+        )
       )
     )
+
     #print(rgb1.shape, prob.shape)
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
-    return rgb, sigma, prob.reshape([-1, self.num_small_nerf]).mean(axis=1)
+    return rgb, sigma, prob
 
 
 def cast_rays(z_vals, origins, directions):
