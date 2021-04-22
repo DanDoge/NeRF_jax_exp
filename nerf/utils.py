@@ -244,7 +244,7 @@ def render_image(render_fn, rays, rng, normalize_disp, chunk=8192, step=500000):
     rays_per_host = chunk_rays[0].shape[0] // jax.host_count()
     start, stop = host_id * rays_per_host, (host_id + 1) * rays_per_host
     chunk_rays = namedtuple_map(lambda r: shard(r[start:stop]), chunk_rays)
-    chunk_results = render_fn(key_0, key_1, chunk_rays, step=step)[-1]
+    chunk_results = render_fn(key_0, key_1, chunk_rays, step)[-1]
     results.append([unshard(x[0], padding) for x in chunk_results])
     # pylint: enable=cell-var-from-loop
   rgb, disp, acc = [jnp.concatenate(r, axis=0) for r in zip(*results)]

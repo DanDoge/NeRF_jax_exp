@@ -58,7 +58,7 @@ class NerfModel(nn.Module):
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
 
   @nn.compact
-  def __call__(self, rng_0, rng_1, rays, randomized, step):
+  def __call__(self, rng_0, rng_1, rays, randomized, step=500000):
     """Nerf Model.
 
     Args:
