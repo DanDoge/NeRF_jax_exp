@@ -206,7 +206,7 @@ def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
   return jnp.concatenate([x] + [four_feat], axis=-1)
 
 
-def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
+def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
   """Volumetric Rendering Function.
   Args:
     rgb: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
@@ -236,6 +236,7 @@ def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   weights = alpha * accum_prod
 
   comp_rgb = (weights[Ellipsis, None] * rgb).sum(axis=-2)
+  comp_prob = (weights[Ellipsis, None] * prob).sum(axis=-2)
   depth = (weights * z_vals).sum(axis=-1)
   acc = weights.sum(axis=-1)
   # Equivalent to (but slightly more efficient and stable than):
@@ -245,7 +246,7 @@ def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   disp = jnp.where((disp > 0) & (disp < inv_eps) & (acc > eps), disp, inv_eps)
   if white_bkgd:
     comp_rgb = comp_rgb + (1. - acc[Ellipsis, None])
-  return comp_rgb, depth, acc, weights
+  return comp_rgb, depth, comp_prob, acc, weights
 
 
 def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):
