@@ -238,7 +238,7 @@ def main(unused_argv):
       eval_variables = jax.device_get(jax.tree_map(lambda x: x[0],
                                                    state)).optimizer.target
       test_case = next(test_dataset)
-      pred_color, pred_disp, pred_prob, pred_acc = utils.render_image(
+      pred_color, pred_disp, pred_acc, pred_prob = utils.render_image(
           functools.partial(render_pfn, eval_variables),
           test_case["rays"],
           keys[0],
