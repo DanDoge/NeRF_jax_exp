@@ -138,7 +138,7 @@ class full_MLP(nn.Module):
         )
       )
     )
-
+    '''
     key, rng = random.split(rng)
     coef = random.bernoulli(key)
     pred_label = jnp.argmax(prob, axis=-1)
@@ -150,6 +150,9 @@ class full_MLP(nn.Module):
 
     rgb = coef * rgb_fixed + (1. - coef) * rgb_mean
     sigma = coef * sigma_fixed + (1. - coef) * sigma_mean
+    '''
+    rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
+    sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
     return rgb, sigma, prob
 
