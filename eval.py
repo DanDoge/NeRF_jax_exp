@@ -96,7 +96,8 @@ def main(unused_argv):
           batch["rays"],
           rng,
           FLAGS.dataset == "llff",
-          chunk=FLAGS.chunk)
+          chunk=FLAGS.chunk, 
+          step=step,)
       if jax.host_id() != 0:  # Only record via host 0.
         continue
       if not FLAGS.eval_once and idx == showcase_index:

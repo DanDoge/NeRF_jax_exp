@@ -58,7 +58,7 @@ class NerfModel(nn.Module):
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
 
   @nn.compact
-  def __call__(self, rng_0, rng_1, rays, randomized):
+  def __call__(self, rng_0, rng_1, rays, randomized, step=500000):
     """Nerf Model.
 
     Args:
@@ -119,13 +119,14 @@ class NerfModel(nn.Module):
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
-    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
+    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order, step)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
           rays.viewdirs,
           0,
           self.deg_view,
-          self.legacy_posenc_order)
+          self.legacy_posenc_order, 
+          step,)
 
     raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, viewdirs_enc, rng_0)
     key, rng_0 = random.split(rng_0)
@@ -168,6 +169,7 @@ class NerfModel(nn.Module):
           self.min_deg_point,
           self.max_deg_point,
           self.legacy_posenc_order,
+          step, 
       )
 
       raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, viewdirs_enc, rng_1)
@@ -251,6 +253,7 @@ def construct_nerf(key, example_batch, args):
       rng_0=key2,
       rng_1=key3,
       rays=utils.namedtuple_map(lambda x: x[0], rays),
-      randomized=args.randomized)
+      randomized=args.randomized,
+      step=0,)
 
   return model, init_variables

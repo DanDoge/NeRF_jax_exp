@@ -199,7 +199,7 @@ def sample_along_rays(key, origins, directions, num_samples, near, far,
   return z_vals, coords
 
 
-def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
+def posenc(x, min_deg, max_deg, legacy_posenc_order=False, step=500000):
   """Cat x with a positional encoding of x with scales 2^[min_deg, max_deg-1].
   Instead of computing [sin(x), cos(x)], we use the trig identity
   cos(x) = sin(x + pi/2) and do one vectorized call to sin([x, x+pi/2]).
@@ -223,6 +223,10 @@ def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
     xb = jnp.reshape((x[Ellipsis, None, :] * scales[:, None]),
                      list(x.shape[:-1]) + [-1])
     four_feat = jnp.sin(jnp.concatenate([xb, xb + 0.5 * jnp.pi], axis=-1))
+    idx = jnp.array([[i, i, i] for i in range(0, max_deg - min_deg)]).reshape(-1)
+    coef = jnp.minimum(jnp.maximum(((step + 100000) * (max_deg - min_deg) / 500000. - idx), 0.), 1.)
+    coef = jnp.concatenate([coef, coef])
+    four_feat = four_feat * coef
   return jnp.concatenate([x] + [four_feat], axis=-1)
 
 
