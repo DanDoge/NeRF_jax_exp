@@ -152,9 +152,9 @@ def main(unused_argv):
       in_axes=(0, 0, 0, None, None),
       donate_argnums=(2,))
 
-  def render_fn(variables, key_0, key_1, rays):
+  def render_fn(variables, key_0, key_1, rays, step):
     return jax.lax.all_gather(
-        model.apply(variables, key_0, key_1, rays, FLAGS.randomized),
+        model.apply(variables, key_0, key_1, rays, FLAGS.randomized, step),
         axis_name="batch")
 
   render_pfn = jax.pmap(
