@@ -97,7 +97,7 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 16
+  num_small_nerf: int = 4
 
   @nn.compact
   def __call__(self, x, condition=None, rng=None):
