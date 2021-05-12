@@ -26,6 +26,27 @@ from jax import lax
 from jax import random
 import jax.numpy as jnp
 
+class Selector(nn.Module):
+  num_small_nerf: int = 4
+  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
+
+  @nn.compact
+  def __call__(self, x):
+    dense_layer = functools.partial(
+      nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    return nn.softmax(
+      dense_layer(self.num_small_nerf)(
+        self.net_activation(
+          dense_layer(128)(
+            self.net_activation(
+              dense_layer(128)(
+                x
+              )
+            )
+          )
+        )
+      )
+    )
 
 
 class MLP(nn.Module):
@@ -100,7 +121,7 @@ class full_MLP(nn.Module):
   num_small_nerf: int = 16
 
   @nn.compact
-  def __call__(self, x, condition=None, rng=None):
+  def __call__(self, x, condition=None, prob=None):
     list_nerf = []
     for i in range(self.num_small_nerf):
       list_nerf.append(
@@ -123,34 +144,6 @@ class full_MLP(nn.Module):
       list_rgb.append(rgb)
       list_sigma.append(sigma)
 
-    dense_layer = functools.partial(
-      nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
-    prob = nn.softmax(
-      dense_layer(self.num_small_nerf)(
-        self.net_activation(
-          dense_layer(128)(
-            self.net_activation(
-              dense_layer(128)(
-                x
-              )
-            )
-          )
-        )
-      )
-    )
-    '''
-    key, rng = random.split(rng)
-    coef = random.bernoulli(key)
-    pred_label = jnp.argmax(prob, axis=-1)
-    rgb_fixed = jnp.take_along_axis(jnp.stack(list_rgb, axis=-2), pred_label[Ellipsis, None, None], axis=-2).squeeze(axis=-2)
-    sigma_fixed = jnp.take_along_axis(jnp.stack(list_sigma, axis=-2), pred_label[Ellipsis, None, None], axis=-2).squeeze(axis=-2)
-
-    rgb_mean = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-    sigma_mean = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-
-    rgb = coef * rgb_fixed + (1. - coef) * rgb_mean
-    sigma = coef * sigma_fixed + (1. - coef) * sigma_mean
-    '''
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
