@@ -90,7 +90,7 @@ def define_flags():
   flags.DEFINE_string("model", "nerf", "name of model to use.")
   flags.DEFINE_float("near", 2., "near clip of volumetric rendering.")
   flags.DEFINE_float("far", 6., "far clip of volumentric rendering.")
-  flags.DEFINE_integer("net_depth", 6, "depth of the first part of MLP.")
+  flags.DEFINE_integer("net_depth", 8, "depth of the first part of MLP.")
   flags.DEFINE_integer("net_width", 256, "width of the first part of MLP.")
   flags.DEFINE_integer("net_depth_condition", 1,
                        "depth of the second part of MLP.")
