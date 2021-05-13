@@ -147,7 +147,7 @@ class full_MLP(nn.Module):
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
-    return rgb, sigma, prob
+    return rgb, sigma
 
 
 def cast_rays(z_vals, origins, directions):
@@ -249,7 +249,6 @@ def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
   weights = alpha * accum_prod
 
   comp_rgb = (weights[Ellipsis, None] * rgb).sum(axis=-2)
-  comp_prob = (weights[Ellipsis, None] * prob).sum(axis=-2)
   depth = (weights * z_vals).sum(axis=-1)
   acc = weights.sum(axis=-1)
   # Equivalent to (but slightly more efficient and stable than):
@@ -259,7 +258,7 @@ def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
   disp = jnp.where((disp > 0) & (disp < inv_eps) & (acc > eps), disp, inv_eps)
   if white_bkgd:
     comp_rgb = comp_rgb + (1. - acc[Ellipsis, None])
-  return comp_rgb, depth, comp_prob, acc, weights
+  return comp_rgb, depth, acc, weights
 
 
 def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):

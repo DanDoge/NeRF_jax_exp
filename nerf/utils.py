@@ -44,6 +44,7 @@ class Stats:
   loss_c: float
   psnr_c: float
   weight_l2: float
+  loss_prob: float
 
 
 Rays = collections.namedtuple("Rays", ("origins", "directions", "viewdirs"))

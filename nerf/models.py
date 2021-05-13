@@ -132,14 +132,15 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, viewdirs_enc, prob(samples_enc))
+    coarse_prob = prob(samples_enc)
+    raw_rgb, raw_sigma = mlp_coarse(samples_enc, viewdirs_enc, coarse_prob)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
     rgb = self.rgb_activation(raw_rgb)
     sigma = self.sigma_activation(raw_sigma)
     # Volumetric rendering.
-    comp_rgb, depth, coarse_prob, acc, weights = model_utils.volumetric_rendering(
+    comp_rgb, depth, acc, weights = model_utils.volumetric_rendering(
         rgb,
         sigma,
         coarse_prob, 
@@ -147,6 +148,7 @@ class NerfModel(nn.Module):
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
+    coarse_prob = (coarse_prob * weights[Ellipsis, None]).sum(axis=(0, 1))
     ret = [
         (comp_rgb, depth, acc, coarse_prob),
     ]
@@ -175,14 +177,15 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
 
-      raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, viewdirs_enc, prob(samples_enc))
+      fine_prob = prob(samples_enc)
+      raw_rgb, raw_sigma = mlp_fine(samples_enc, viewdirs_enc, fine_prob)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)
       rgb = self.rgb_activation(raw_rgb)
       sigma = self.sigma_activation(raw_sigma)
 
-      comp_rgb, disp, fine_prob, acc, unused_weights = model_utils.volumetric_rendering(
+      comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
           rgb,
           sigma,
           fine_prob, 
@@ -190,6 +193,7 @@ class NerfModel(nn.Module):
           rays.directions,
           white_bkgd=self.white_bkgd,
       )
+      fine_prob = (fine_prob * weights[Ellipsis, None]).sum(axis=(0, 1))
       ret.append((comp_rgb, disp, acc, fine_prob))
     return ret
 
