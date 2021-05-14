@@ -148,7 +148,7 @@ class NerfModel(nn.Module):
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
-    coarse_prob = (coarse_prob * weights[Ellipsis, None]).sum(axis=(0, 1))
+    coarse_prob = (coarse_prob * weights[Ellipsis, None]).mean(axis=(0, 1))
     ret = [
         (comp_rgb, depth, acc, coarse_prob),
     ]
@@ -193,7 +193,7 @@ class NerfModel(nn.Module):
           rays.directions,
           white_bkgd=self.white_bkgd,
       )
-      fine_prob = (fine_prob * weights[Ellipsis, None]).sum(axis=(0, 1))
+      fine_prob = (fine_prob * weights[Ellipsis, None]).mean(axis=(0, 1))
       ret.append((comp_rgb, disp, acc, fine_prob))
     return ret
 
