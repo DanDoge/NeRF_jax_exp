@@ -118,12 +118,14 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 16
+  num_small_nerf: int = 2
 
   @nn.compact
-  def __call__(self, x, condition=None, prob=None):
+  def __call__(self, x, condition=None):
+    bbox_max = jnp.array([3.02, 3.02, 2.33])
+    bbox_min = jnp.array([-3.02, -3.02, -2.60])
     list_nerf = []
-    for i in range(self.num_small_nerf):
+    for i in range(self.num_small_nerf ** 3):
       list_nerf.append(
         MLP(
           net_depth=self.net_depth,
@@ -137,15 +139,20 @@ class full_MLP(nn.Module):
         )
       )
 
-    list_rgb = []
-    list_sigma = []
-    for nerf in list_nerf:
-      rgb, sigma = nerf(x, condition)
-      list_rgb.append(rgb)
-      list_sigma.append(sigma)
-
-    rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-    sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
+    rgb = jnp.zeros(list(x.shape[:-1]) + [3])
+    sigma = jnp.zeros(list(x.shape[:-1]) + [1])
+    coord = ((x[..., :3] - bbox_min) / (bbox_max - bbox_min) * self.num_small_nerf).astype(jnp.int32)
+    nerf_indices, inverse_indices = jnp.unique(coord[..., 0] * self.num_small_nerf * self.num_small_nerf + coord[..., 1] * self.num_small_nerf + coord[..., 2], return_inverse=True)
+    nerf_indices = jax.lax.stop_gradient(nerf_indices)
+    inverse_indices = jax.lax.stop_gradient(inverse_indices)
+    for (idx, nerf_idx) in enumerate(nerf_indices):
+      network = list_nerf[nerf_idx]
+      x_idx = x[inverse_indices == idx]
+      rgb_idx, sigma_idx = network(x_idx)
+      #rgb[inverse_indices == idx] = rgb_idx
+      rgb = jax.ops.index_update(rgb, inverse_indices == idx, rgb_idx)
+      sigma = jax.ops.index_update(sigma, inverse_indices == idx, sigma_idx)
+      #sigma[inverse_indices == idx] = sigma_idx
 
     return rgb, sigma
 
@@ -219,7 +226,7 @@ def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
   return jnp.concatenate([x] + [four_feat], axis=-1)
 
 
-def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
+def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   """Volumetric Rendering Function.
   Args:
     rgb: jnp.ndarray(float32), color, [batch_size, num_samples, 3]

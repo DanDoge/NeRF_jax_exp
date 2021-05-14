@@ -118,7 +118,6 @@ class NerfModel(nn.Module):
         num_sigma_channels=self.num_sigma_channels, 
         num_small_nerf=self.num_small_nerf)
     # Stratified sampling along rays
-    prob = model_utils.Selector(self.num_small_nerf)
 
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
@@ -132,8 +131,7 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    coarse_prob = prob(model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 2, self.legacy_posenc_order))
-    raw_rgb, raw_sigma = mlp_coarse(samples_enc, viewdirs_enc, coarse_prob)
+    raw_rgb, raw_sigma = mlp_coarse(samples_enc, viewdirs_enc)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -143,14 +141,12 @@ class NerfModel(nn.Module):
     comp_rgb, depth, acc, weights = model_utils.volumetric_rendering(
         rgb,
         sigma,
-        coarse_prob, 
         z_vals,
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
-    coarse_prob = (coarse_prob * weights[Ellipsis, None]).sum(axis=(0, 1))
     ret = [
-        (comp_rgb, depth, acc, coarse_prob),
+        (comp_rgb, depth, acc),
     ]
     # Hierarchical sampling based on coarse predictions
     if self.num_fine_samples > 0:
@@ -177,8 +173,7 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
 
-      fine_prob = prob(model_utils.posenc(samples, self.min_deg_point, self.max_deg_point // 2, self.legacy_posenc_order))
-      raw_rgb, raw_sigma = mlp_fine(samples_enc, viewdirs_enc, fine_prob)
+      raw_rgb, raw_sigma = mlp_fine(samples_enc, viewdirs_enc)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)
@@ -188,13 +183,11 @@ class NerfModel(nn.Module):
       comp_rgb, disp, acc, weights = model_utils.volumetric_rendering(
           rgb,
           sigma,
-          fine_prob, 
           z_vals,
           rays.directions,
           white_bkgd=self.white_bkgd,
       )
-      fine_prob = (fine_prob * weights[Ellipsis, None]).sum(axis=(0, 1))
-      ret.append((comp_rgb, disp, acc, fine_prob))
+      ret.append((comp_rgb, disp, acc))
     return ret
 
 
