@@ -236,14 +236,14 @@ def main(unused_argv):
       eval_variables = jax.device_get(jax.tree_map(lambda x: x[0],
                                                    state)).optimizer.target
       test_case = next(test_dataset)
-      pred_color, pred_disp, pred_acc, pred_prob = utils.render_image(
+      pred_color, pred_disp, pred_acc = utils.render_image(
           functools.partial(render_pfn, eval_variables),
           test_case["rays"],
           keys[0],
           FLAGS.dataset == "llff",
           chunk=FLAGS.chunk)
 
-      pred_prob = jnp.argmax(pred_prob, axis=-1).astype(pred_color.dtype) / 16.
+      #pred_prob = jnp.argmax(pred_prob, axis=-1).astype(pred_color.dtype) / 16.
       # Log eval summaries on host 0.
       if jax.host_id() == 0:
         psnr = utils.compute_psnr(
@@ -257,7 +257,6 @@ def main(unused_argv):
         summary_writer.scalar("test_psnr", psnr, step)
         summary_writer.scalar("test_ssim", ssim, step)
         summary_writer.image("test_pred_color", pred_color, step)
-        summary_writer.image("test_pred_label", pred_prob, step)
         summary_writer.image("test_pred_disp", pred_disp, step)
         summary_writer.image("test_pred_acc", pred_acc, step)
         summary_writer.image("test_target", test_case["pixels"], step)
