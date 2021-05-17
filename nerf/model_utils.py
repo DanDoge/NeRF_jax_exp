@@ -137,9 +137,9 @@ class full_MLP(nn.Module):
       list_nerf.append(
         MLP(
           net_depth=self.net_depth,
-          net_width=self.net_width // int(math.sqrt(self.num_small_nerf)),
+          net_width=64,
           net_depth_condition=self.net_depth_condition,
-          net_width_condition=self.net_width_condition // int(math.sqrt(self.num_small_nerf)),
+          net_width_condition=32,
           net_activation=self.net_activation,
           skip_layer=self.skip_layer,
           num_rgb_channels=self.num_rgb_channels,
