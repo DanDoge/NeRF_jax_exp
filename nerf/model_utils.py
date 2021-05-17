@@ -122,8 +122,16 @@ class full_MLP(nn.Module):
 
   @nn.compact
   def __call__(self, x, condition=None):
-    bbox_max = jnp.array([3.02, 3.02, 2.33])
+    bbox_max = jnp.array([3.02, 3.02, 2.60])
     bbox_min = jnp.array([-3.02, -3.02, -2.60])
+    grid_center = jnp.array([[1.51, 1.51, 1.30], 
+                             [1.51, 1.51, -1.30], 
+                             [1.51, -1.51, 1.30], 
+                             [1.51, -1.51, -1.30], 
+                             [-1.51, 1.51, 1.30], 
+                             [-1.51, 1.51, -1.30], 
+                             [-1.51, -1.51, 1.30], 
+                             [-1.51, -1.51, -1.30]])
     list_nerf = []
     for i in range(self.num_small_nerf ** 3):
       list_nerf.append(
@@ -139,20 +147,18 @@ class full_MLP(nn.Module):
         )
       )
 
-    rgb = jnp.zeros(list(x.shape[:-1]) + [3])
-    sigma = jnp.zeros(list(x.shape[:-1]) + [1])
-    coord = ((x[..., :3] - bbox_min) / (bbox_max - bbox_min) * self.num_small_nerf).astype(jnp.int32)
-    nerf_indices, inverse_indices = jnp.unique(coord[..., 0] * self.num_small_nerf * self.num_small_nerf + coord[..., 1] * self.num_small_nerf + coord[..., 2], return_inverse=True)
-    nerf_indices = jax.lax.stop_gradient(nerf_indices)
-    inverse_indices = jax.lax.stop_gradient(inverse_indices)
-    for (idx, nerf_idx) in enumerate(nerf_indices):
-      network = list_nerf[nerf_idx]
-      x_idx = x[inverse_indices == idx]
-      rgb_idx, sigma_idx = network(x_idx)
-      #rgb[inverse_indices == idx] = rgb_idx
-      rgb = jax.ops.index_update(rgb, inverse_indices == idx, rgb_idx)
-      sigma = jax.ops.index_update(sigma, inverse_indices == idx, sigma_idx)
-      #sigma[inverse_indices == idx] = sigma_idx
+    inv_distance = 1. / ((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 6).sum(axis=-1)
+    prob = inv_distance / inv_distance.sum(axis=-1)[Ellipsis, None]
+    list_rgb = []
+    list_sigma = []
+    for nerf in list_nerf:
+      rgb, sigma = nerf(x, condition)
+      list_rgb.append(rgb)
+      list_sigma.append(sigma)
+
+    rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
+    sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
+
 
     return rgb, sigma
 
