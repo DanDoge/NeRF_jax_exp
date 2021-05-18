@@ -138,19 +138,7 @@ class full_MLP(nn.Module):
         )
       )
     )
-    '''
-    key, rng = random.split(rng)
-    coef = random.bernoulli(key)
-    pred_label = jnp.argmax(prob, axis=-1)
-    rgb_fixed = jnp.take_along_axis(jnp.stack(list_rgb, axis=-2), pred_label[Ellipsis, None, None], axis=-2).squeeze(axis=-2)
-    sigma_fixed = jnp.take_along_axis(jnp.stack(list_sigma, axis=-2), pred_label[Ellipsis, None, None], axis=-2).squeeze(axis=-2)
-
-    rgb_mean = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-    sigma_mean = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-
-    rgb = coef * rgb_fixed + (1. - coef) * rgb_mean
-    sigma = coef * sigma_fixed + (1. - coef) * sigma_mean
-    '''
+    
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
