@@ -118,12 +118,21 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 2
+  num_small_nerf: int = 4
 
   @nn.compact
   def __call__(self, x, condition=None):
     bbox_max = jnp.array([3.02, 3.02, 2.60])
     bbox_min = jnp.array([-3.02, -3.02, -2.60])
+    grid_center = []
+    for x in jnp.arange(1., 9., 2.):
+      for y in jnp.arange(1., 9., 2.):
+        for z in jnp.arange(1., 9., 2.):
+          grid_center.append([(bbox_min[0] * x + bbox_max[0] * (8. - x)) / 8.,
+                              (bbox_min[1] * y + bbox_max[1] * (8. - y)) / 8.,
+                              (bbox_min[2] * z + bbox_max[2] * (8. - z)) / 8.
+                              ])
+    '''
     grid_center = jnp.array([[1.51, 1.51, 1.30], 
                              [1.51, 1.51, -1.30], 
                              [1.51, -1.51, 1.30], 
@@ -132,6 +141,7 @@ class full_MLP(nn.Module):
                              [-1.51, 1.51, -1.30], 
                              [-1.51, -1.51, 1.30], 
                              [-1.51, -1.51, -1.30]])
+    '''
     list_nerf = []
     for i in range(self.num_small_nerf ** 3):
       list_nerf.append(
