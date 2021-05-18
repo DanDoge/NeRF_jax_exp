@@ -125,13 +125,14 @@ class full_MLP(nn.Module):
     bbox_max = jnp.array([3.02, 3.02, 2.60])
     bbox_min = jnp.array([-3.02, -3.02, -2.60])
     grid_center = []
-    for x in jnp.arange(1., 9., 2.):
-      for y in jnp.arange(1., 9., 2.):
-        for z in jnp.arange(1., 9., 2.):
-          grid_center.append([(bbox_min[0] * x + bbox_max[0] * (8. - x)) / 8.,
-                              (bbox_min[1] * y + bbox_max[1] * (8. - y)) / 8.,
-                              (bbox_min[2] * z + bbox_max[2] * (8. - z)) / 8.
+    for xx in jnp.arange(1., 9., 2.):
+      for yy in jnp.arange(1., 9., 2.):
+        for zz in jnp.arange(1., 9., 2.):
+          grid_center.append([(bbox_min[0] * xx + bbox_max[0] * (8. - xx)) / 8.,
+                              (bbox_min[1] * yy + bbox_max[1] * (8. - yy)) / 8.,
+                              (bbox_min[2] * zz + bbox_max[2] * (8. - zz)) / 8.
                               ])
+    grid_center = jnp.array(grid_center)
     '''
     grid_center = jnp.array([[1.51, 1.51, 1.30], 
                              [1.51, 1.51, -1.30], 
