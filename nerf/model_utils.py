@@ -118,31 +118,22 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 4
+  num_small_nerf: int = 2
 
   @nn.compact
   def __call__(self, x, condition=None):
     bbox_max = jnp.array([3.02, 3.02, 2.60])
     bbox_min = jnp.array([-3.02, -3.02, -2.60])
     grid_center = []
-    for xx in jnp.arange(1., 9., 2.):
-      for yy in jnp.arange(1., 9., 2.):
-        for zz in jnp.arange(1., 9., 2.):
-          grid_center.append([(bbox_min[0] * xx + bbox_max[0] * (8. - xx)) / 8.,
-                              (bbox_min[1] * yy + bbox_max[1] * (8. - yy)) / 8.,
-                              (bbox_min[2] * zz + bbox_max[2] * (8. - zz)) / 8.
+    for xx in jnp.arange(1., 5., 2.):
+      for yy in jnp.arange(1., 5., 2.):
+        for zz in jnp.arange(1., 5., 2.):
+          grid_center.append([(bbox_min[0] * xx + bbox_max[0] * (4. - xx)) / 4.,
+                              (bbox_min[1] * yy + bbox_max[1] * (4. - yy)) / 4.,
+                              (bbox_min[2] * zz + bbox_max[2] * (4. - zz)) / 4.
                               ])
     grid_center = jnp.array(grid_center)
-    '''
-    grid_center = jnp.array([[1.51, 1.51, 1.30], 
-                             [1.51, 1.51, -1.30], 
-                             [1.51, -1.51, 1.30], 
-                             [1.51, -1.51, -1.30], 
-                             [-1.51, 1.51, 1.30], 
-                             [-1.51, 1.51, -1.30], 
-                             [-1.51, -1.51, 1.30], 
-                             [-1.51, -1.51, -1.30]])
-    '''
+
     list_nerf = []
     for i in range(self.num_small_nerf ** 3):
       list_nerf.append(
@@ -158,7 +149,7 @@ class full_MLP(nn.Module):
         )
       )
 
-    inv_distance = 1. / ((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 6).sum(axis=-1)
+    inv_distance = 1. / ((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 10).sum(axis=-1)
     prob = inv_distance / inv_distance.sum(axis=-1)[Ellipsis, None]
     list_rgb = []
     list_sigma = []
