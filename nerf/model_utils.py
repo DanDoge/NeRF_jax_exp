@@ -78,13 +78,13 @@ class MLP(nn.Module):
     x = x.reshape([-1, feature_dim])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    activ = getattr(nn, "sigmoid")
 
     inputs = x
     for i in range(net_depth):
-      x = dense_layer(x, net_width)
+      gate = dense_layer(x, net_width)
+      x = x * (1. - gate) + gate * dense_layer(x, net_width)
       x = net_activation(x)
-      if i % skip_layer == 0 and i > 0:
-        x = jnp.concatenate([x, inputs], axis=-1)
     raw_sigma = dense_layer(x, num_sigma_channels).reshape(
         [-1, num_samples, num_sigma_channels])
     if condition is not None:
