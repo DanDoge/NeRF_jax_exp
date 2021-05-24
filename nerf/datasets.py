@@ -168,7 +168,7 @@ class Dataset(threading.Thread):
       return {
           "pixels": self.images[idx],
           "rays": utils.namedtuple_map(lambda r: r[idx], self.rays), 
-          "iter": 500000 * np.ones_like(batch_pixels),
+          "iter": 500000 * np.ones_like(self.images[idx]),
       }
 
   # TODO(bydeng): Swap this function with a more flexible camera model.

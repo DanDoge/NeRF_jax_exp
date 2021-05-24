@@ -139,7 +139,10 @@ class full_MLP(nn.Module):
       )
     )
 
-    prob = jnp.exp(prob / (0.99 ** (it.reshape(-1)[0] // 1000)))
+    if it is None:
+      prob = jnp.exp(prob / (0.99 ** (500000 // 1000)))
+    else:
+      prob = jnp.exp(prob / (0.99 ** (it.reshape(-1)[0] // 1000)))
     prob = prob / prob.sum(axis=-1)[Ellipsis, None]
     
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)

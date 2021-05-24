@@ -72,7 +72,6 @@ def train_step(model, rng, state, batch, lr):
       # the coarse prediction (ret[0]) as well.
       rgb_c, unused_disp_c, unused_acc_c = ret[0]
       loss_c = ((rgb_c - batch["pixels"][Ellipsis, :3])**2).mean()
-      coarse_prob = coarse_prob.reshape([-1, 16]).mean(axis=0)
       psnr_c = utils.compute_psnr(loss_c)
     else:
       loss_c = 0.
@@ -150,15 +149,15 @@ def main(unused_argv):
       in_axes=(0, 0, 0, None),
       donate_argnums=(2,))
 
-  def render_fn(variables, key_0, key_1, rays, it):
+  def render_fn(variables, key_0, key_1, rays):
     return jax.lax.all_gather(
-        model.apply(variables, key_0, key_1, rays, it, FLAGS.randomized),
+        model.apply(variables, key_0, key_1, rays, None, FLAGS.randomized),
         axis_name="batch")
 
   render_pfn = jax.pmap(
       render_fn,
-      in_axes=(None, None, None, 0, 0),  # Only distribute the data input.
-      donate_argnums=(3,4),
+      in_axes=(None, None, None, 0),  # Only distribute the data input.
+      donate_argnums=(3,),
       axis_name="batch",
   )
 
