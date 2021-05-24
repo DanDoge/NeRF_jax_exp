@@ -155,7 +155,7 @@ class Dataset(threading.Thread):
     else:
       raise NotImplementedError(
           f"{self.batching} batching strategy is not implemented.")
-    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it}
+    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it * np.ones_like(batch_pixels)}
 
   def _next_test(self):
     """Sample next test example."""
@@ -168,7 +168,7 @@ class Dataset(threading.Thread):
       return {
           "pixels": self.images[idx],
           "rays": utils.namedtuple_map(lambda r: r[idx], self.rays), 
-          "iter": 500000,
+          "iter": 500000 * np.ones_like(batch_pixels),
       }
 
   # TODO(bydeng): Swap this function with a more flexible camera model.
