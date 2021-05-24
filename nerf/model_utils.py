@@ -139,10 +139,12 @@ class full_MLP(nn.Module):
       )
     )
 
+    key, rng = jax.random.split(rng)
+    gumbel = jax.random.gumbel(key, shape=[self.num_small_nerf])
     if it is None:
-      prob = jnp.exp(prob / (0.99 ** (500000 // 1000)))
+      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / 0.5)
     else:
-      prob = jnp.exp(prob / (0.99 ** (it.reshape(-1)[0] // 1000)))
+      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.max(0.5, 1. - it.reshape(-1)[0] / 500000))
     prob = prob / prob.sum(axis=-1)[Ellipsis, None]
     
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)

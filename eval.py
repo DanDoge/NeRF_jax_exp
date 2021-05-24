@@ -91,7 +91,7 @@ def main(unused_argv):
     for idx in range(dataset.size):
       print(f"Evaluating {idx+1}/{dataset.size}")
       batch = next(dataset)
-      pred_color, pred_disp, pred_acc, _ = utils.render_image(
+      pred_color, pred_disp, pred_acc = utils.render_image(
           functools.partial(render_pfn, state.optimizer.target),
           batch["rays"],
           rng,
