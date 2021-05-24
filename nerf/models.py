@@ -58,7 +58,7 @@ class NerfModel(nn.Module):
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
 
   @nn.compact
-  def __call__(self, rng_0, rng_1, rays, randomized):
+  def __call__(self, rng_0, rng_1, rays, it, randomized):
     """Nerf Model.
 
     Args:
@@ -127,7 +127,7 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, viewdirs_enc, rng_0)
+    raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, it, viewdirs_enc, rng_0)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -170,7 +170,7 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
 
-      raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, viewdirs_enc, rng_1)
+      raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, it, viewdirs_enc, rng_1)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)

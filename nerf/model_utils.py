@@ -100,7 +100,7 @@ class full_MLP(nn.Module):
   num_small_nerf: int = 4
 
   @nn.compact
-  def __call__(self, x, condition=None, rng=None):
+  def __call__(self, x, it, condition=None, rng=None):
     list_nerf = []
     for i in range(self.num_small_nerf):
       list_nerf.append(
@@ -138,6 +138,9 @@ class full_MLP(nn.Module):
         )
       )
     )
+
+    prob = jnp.exp(prob / (0.99 ** (it // 1000)))
+    prob = prob / prob.sum(axis=-1)[Ellipsis, None]
     
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)

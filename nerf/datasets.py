@@ -116,6 +116,7 @@ class Dataset(threading.Thread):
     """Initialize training."""
     self._load_renderings(args)
     self._generate_rays()
+    self.it = 0
 
     if args.batching == "all_images":
       # flatten the ray and image dimension together.
@@ -137,6 +138,7 @@ class Dataset(threading.Thread):
 
   def _next_train(self):
     """Sample next training batch."""
+    self.it += 1
 
     if self.batching == "all_images":
       ray_indices = np.random.randint(0, self.rays[0].shape[0],
@@ -153,7 +155,7 @@ class Dataset(threading.Thread):
     else:
       raise NotImplementedError(
           f"{self.batching} batching strategy is not implemented.")
-    return {"pixels": batch_pixels, "rays": batch_rays}
+    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it}
 
   def _next_test(self):
     """Sample next test example."""
@@ -165,7 +167,8 @@ class Dataset(threading.Thread):
     else:
       return {
           "pixels": self.images[idx],
-          "rays": utils.namedtuple_map(lambda r: r[idx], self.rays)
+          "rays": utils.namedtuple_map(lambda r: r[idx], self.rays), 
+          "iter": 500000,
       }
 
   # TODO(bydeng): Swap this function with a more flexible camera model.

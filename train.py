@@ -57,7 +57,8 @@ def train_step(model, rng, state, batch, lr):
 
   def loss_fn(variables):
     rays = batch["rays"]
-    ret = model.apply(variables, key_0, key_1, rays, FLAGS.randomized)
+    it = batch["iter"]
+    ret = model.apply(variables, key_0, key_1, rays, it, FLAGS.randomized)
     if len(ret) not in (1, 2):
       raise ValueError(
           "ret should contain either 1 set of output (coarse only), or 2 sets"
@@ -152,15 +153,15 @@ def main(unused_argv):
       in_axes=(0, 0, 0, None),
       donate_argnums=(2,))
 
-  def render_fn(variables, key_0, key_1, rays):
+  def render_fn(variables, key_0, key_1, rays, it):
     return jax.lax.all_gather(
-        model.apply(variables, key_0, key_1, rays, FLAGS.randomized),
+        model.apply(variables, key_0, key_1, rays, it, FLAGS.randomized),
         axis_name="batch")
 
   render_pfn = jax.pmap(
       render_fn,
-      in_axes=(None, None, None, 0),  # Only distribute the data input.
-      donate_argnums=(3,),
+      in_axes=(None, None, None, 0, 0),  # Only distribute the data input.
+      donate_argnums=(3,4),
       axis_name="batch",
   )
 
@@ -241,6 +242,7 @@ def main(unused_argv):
       pred_color, pred_disp, pred_acc, pred_prob = utils.render_image(
           functools.partial(render_pfn, eval_variables),
           test_case["rays"],
+          test_case["iter"],
           keys[0],
           FLAGS.dataset == "llff",
           chunk=FLAGS.chunk)
