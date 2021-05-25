@@ -118,18 +118,18 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 16
+  num_small_nerf: int = 8
 
   @nn.compact
-  def __call__(self, x, condition=None, prob=None):
+  def __call__(self, x, it, condition=None, prob=None, rng=None):
     list_nerf = []
     for i in range(self.num_small_nerf):
       list_nerf.append(
         MLP(
           net_depth=self.net_depth,
-          net_width=self.net_width // int(math.sqrt(self.num_small_nerf)),
+          net_width=self.net_width,
           net_depth_condition=self.net_depth_condition,
-          net_width_condition=self.net_width_condition // int(math.sqrt(self.num_small_nerf)),
+          net_width_condition=self.net_width_condition,
           net_activation=self.net_activation,
           skip_layer=self.skip_layer,
           num_rgb_channels=self.num_rgb_channels,
@@ -144,10 +144,26 @@ class full_MLP(nn.Module):
       list_rgb.append(rgb)
       list_sigma.append(sigma)
 
+    key, rng = jax.random.split(rng)
+    gumbel = jax.random.gumbel(key, shape=[self.num_small_nerf])
+
+    if it is None:
+      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / 0.5)
+    else:
+      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(0.5, 1. - it.reshape(-1)[0] / 500000))
+
+    prob = prob / prob.sum(axis=-1)[Ellipsis, None]
+
+    hard_idx = prob.argmax(-1)
+    hard_prob = jax.nn.one_hot(hard_idx, prob.shape[-1])
+
+    prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
+
+
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
 
-    return rgb, sigma, prob
+    return rgb, sigma
 
 
 def cast_rays(z_vals, origins, directions):
@@ -219,7 +235,7 @@ def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
   return jnp.concatenate([x] + [four_feat], axis=-1)
 
 
-def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
+def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   """Volumetric Rendering Function.
   Args:
     rgb: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
@@ -249,7 +265,6 @@ def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
   weights = alpha * accum_prod
 
   comp_rgb = (weights[Ellipsis, None] * rgb).sum(axis=-2)
-  comp_prob = (weights[Ellipsis, None] * prob).sum(axis=-2)
   depth = (weights * z_vals).sum(axis=-1)
   acc = weights.sum(axis=-1)
   # Equivalent to (but slightly more efficient and stable than):
@@ -259,7 +274,7 @@ def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
   disp = jnp.where((disp > 0) & (disp < inv_eps) & (acc > eps), disp, inv_eps)
   if white_bkgd:
     comp_rgb = comp_rgb + (1. - acc[Ellipsis, None])
-  return comp_rgb, depth, comp_prob, acc, weights
+  return comp_rgb, depth, acc, weights
 
 
 def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):

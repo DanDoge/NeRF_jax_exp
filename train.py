@@ -57,24 +57,20 @@ def train_step(model, rng, state, batch, lr):
 
   def loss_fn(variables):
     rays = batch["rays"]
-    ret = model.apply(variables, key_0, key_1, rays, FLAGS.randomized)
+    ret = model.apply(variables, key_0, key_1, rays, batch["iter"], FLAGS.randomized)
     if len(ret) not in (1, 2):
       raise ValueError(
           "ret should contain either 1 set of output (coarse only), or 2 sets"
           "of output (coarse as ret[0] and fine as ret[1]).")
     # The main prediction is always at the end of the ret list.
-    rgb, unused_disp, unused_acc, fine_prob = ret[-1]
+    rgb, unused_disp, unused_acc = ret[-1]
     loss = ((rgb - batch["pixels"][Ellipsis, :3])**2).mean()
-    fine_prob = fine_prob.reshape([-1, 16]).mean(axis=0)
-    loss_prob = (fine_prob * jnp.log(fine_prob + 1e-3)).mean()
     psnr = utils.compute_psnr(loss)
     if len(ret) > 1:
       # If there are both coarse and fine predictions, we compute the loss for
       # the coarse prediction (ret[0]) as well.
-      rgb_c, unused_disp_c, unused_acc_c, coarse_prob = ret[0]
+      rgb_c, unused_disp_c, unused_acc_c = ret[0]
       loss_c = ((rgb_c - batch["pixels"][Ellipsis, :3])**2).mean()
-      coarse_prob = coarse_prob.reshape([-1, 16]).mean(axis=0)
-      loss_prob += (coarse_prob * jnp.log(coarse_prob + 1e-3)).mean()
       psnr_c = utils.compute_psnr(loss_c)
     else:
       loss_c = 0.
@@ -154,7 +150,7 @@ def main(unused_argv):
 
   def render_fn(variables, key_0, key_1, rays):
     return jax.lax.all_gather(
-        model.apply(variables, key_0, key_1, rays, FLAGS.randomized),
+        model.apply(variables, key_0, key_1, rays, None, FLAGS.randomized),
         axis_name="batch")
 
   render_pfn = jax.pmap(
@@ -238,14 +234,13 @@ def main(unused_argv):
       eval_variables = jax.device_get(jax.tree_map(lambda x: x[0],
                                                    state)).optimizer.target
       test_case = next(test_dataset)
-      pred_color, pred_disp, pred_acc, pred_prob = utils.render_image(
+      pred_color, pred_disp, pred_acc = utils.render_image(
           functools.partial(render_pfn, eval_variables),
           test_case["rays"],
           keys[0],
           FLAGS.dataset == "llff",
           chunk=FLAGS.chunk)
 
-      pred_prob = jnp.argmax(pred_prob, axis=-1).astype(pred_color.dtype) / 16.
       # Log eval summaries on host 0.
       if jax.host_id() == 0:
         psnr = utils.compute_psnr(
@@ -259,7 +254,6 @@ def main(unused_argv):
         summary_writer.scalar("test_psnr", psnr, step)
         summary_writer.scalar("test_ssim", ssim, step)
         summary_writer.image("test_pred_color", pred_color, step)
-        summary_writer.image("test_pred_label", pred_prob, step)
         summary_writer.image("test_pred_disp", pred_disp, step)
         summary_writer.image("test_pred_acc", pred_acc, step)
         summary_writer.image("test_target", test_case["pixels"], step)

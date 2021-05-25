@@ -91,10 +91,10 @@ def define_flags():
   flags.DEFINE_float("near", 2., "near clip of volumetric rendering.")
   flags.DEFINE_float("far", 6., "far clip of volumentric rendering.")
   flags.DEFINE_integer("net_depth", 8, "depth of the first part of MLP.")
-  flags.DEFINE_integer("net_width", 256, "width of the first part of MLP.")
+  flags.DEFINE_integer("net_width", 64, "width of the first part of MLP.")
   flags.DEFINE_integer("net_depth_condition", 1,
                        "depth of the second part of MLP.")
-  flags.DEFINE_integer("net_width_condition", 128,
+  flags.DEFINE_integer("net_width_condition", 32,
                        "width of the second part of MLP.")
   flags.DEFINE_float("weight_decay_mult", 0, "The multiplier on weight decay")
   flags.DEFINE_integer(
@@ -247,13 +247,13 @@ def render_image(render_fn, rays, rng, normalize_disp, chunk=8192):
     chunk_results = render_fn(key_0, key_1, chunk_rays)[-1]
     results.append([unshard(x[0], padding) for x in chunk_results])
     # pylint: enable=cell-var-from-loop
-  rgb, disp, acc, prob = [jnp.concatenate(r, axis=0) for r in zip(*results)]
+  rgb, disp, acc = [jnp.concatenate(r, axis=0) for r in zip(*results)]
   #print(prob.shape)
   # Normalize disp for visualization for ndc_rays in llff front-facing scenes.
   if normalize_disp:
     disp = (disp - disp.min()) / (disp.max() - disp.min())
   return (rgb.reshape((height, width, -1)), disp.reshape(
-      (height, width, -1)), acc.reshape((height, width, -1)), prob.reshape((height, width, -1)))
+      (height, width, -1)), acc.reshape((height, width, -1)))
 
 
 def compute_psnr(mse):

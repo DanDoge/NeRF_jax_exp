@@ -57,7 +57,7 @@ def main(unused_argv):
   # this eliminates "speckle" artifacts.
   def render_fn(variables, key_0, key_1, rays):
     return jax.lax.all_gather(
-        model.apply(variables, key_0, key_1, rays, False), axis_name="batch")
+        model.apply(variables, key_0, key_1, rays, None, False), axis_name="batch")
 
   # pmap over only the data input.
   render_pfn = jax.pmap(
@@ -91,7 +91,7 @@ def main(unused_argv):
     for idx in range(dataset.size):
       print(f"Evaluating {idx+1}/{dataset.size}")
       batch = next(dataset)
-      pred_color, pred_disp, pred_acc, _ = utils.render_image(
+      pred_color, pred_disp, pred_acc = utils.render_image(
           functools.partial(render_pfn, state.optimizer.target),
           batch["rays"],
           rng,

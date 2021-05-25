@@ -56,10 +56,10 @@ class NerfModel(nn.Module):
   rgb_activation: Callable[Ellipsis, Any]  # Output RGB activation.
   sigma_activation: Callable[Ellipsis, Any]  # Output sigma activation.
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
-  num_small_nerf: int = 16
+  num_small_nerf: int = 8
 
   @nn.compact
-  def __call__(self, rng_0, rng_1, rays, randomized):
+  def __call__(self, rng_0, rng_1, rays, it, randomized):
     """Nerf Model.
 
     Args:
@@ -132,23 +132,22 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, viewdirs_enc, prob(samples_enc))
+    raw_rgb, raw_sigma = mlp_coarse(samples_enc, it, viewdirs_enc, prob(samples_enc), rng_0)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
     rgb = self.rgb_activation(raw_rgb)
     sigma = self.sigma_activation(raw_sigma)
     # Volumetric rendering.
-    comp_rgb, depth, coarse_prob, acc, weights = model_utils.volumetric_rendering(
+    comp_rgb, depth, acc, weights = model_utils.volumetric_rendering(
         rgb,
         sigma,
-        coarse_prob, 
         z_vals,
         rays.directions,
         white_bkgd=self.white_bkgd,
     )
     ret = [
-        (comp_rgb, depth, acc, coarse_prob),
+        (comp_rgb, depth, acc),
     ]
     # Hierarchical sampling based on coarse predictions
     if self.num_fine_samples > 0:
@@ -175,22 +174,21 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
 
-      raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, viewdirs_enc, prob(samples_enc))
+      raw_rgb, raw_sigma = mlp_fine(samples_enc, it, viewdirs_enc, prob(samples_enc), rng_1)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)
       rgb = self.rgb_activation(raw_rgb)
       sigma = self.sigma_activation(raw_sigma)
 
-      comp_rgb, disp, fine_prob, acc, unused_weights = model_utils.volumetric_rendering(
+      comp_rgb, disp, acc, unused_weights = model_utils.volumetric_rendering(
           rgb,
           sigma,
-          fine_prob, 
           z_vals,
           rays.directions,
           white_bkgd=self.white_bkgd,
       )
-      ret.append((comp_rgb, disp, acc, fine_prob))
+      ret.append((comp_rgb, disp, acc))
     return ret
 
 
@@ -256,6 +254,7 @@ def construct_nerf(key, example_batch, args):
       rng_0=key2,
       rng_1=key3,
       rays=utils.namedtuple_map(lambda x: x[0], rays),
+      it=example_batch["iter"],
       randomized=args.randomized)
 
   return model, init_variables
