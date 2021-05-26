@@ -125,12 +125,12 @@ class full_MLP(nn.Module):
     bbox_max = jnp.array([3.02, 3.02, 2.60])
     bbox_min = jnp.array([-3.02, -3.02, -2.60])
     grid_center = []
-    for xx in jnp.arange(1., 5., 2.):
-      for yy in jnp.arange(1., 5., 2.):
-        for zz in jnp.arange(1., 5., 2.):
-          grid_center.append([(bbox_min[0] * xx + bbox_max[0] * (4. - xx)) / 4.,
-                              (bbox_min[1] * yy + bbox_max[1] * (4. - yy)) / 4.,
-                              (bbox_min[2] * zz + bbox_max[2] * (4. - zz)) / 4.
+    for xx in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
+      for yy in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
+        for zz in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
+          grid_center.append([(bbox_min[0] * xx + bbox_max[0] * (2. * self.num_small_nerf - xx)) / (2. * self.num_small_nerf),
+                              (bbox_min[1] * yy + bbox_max[1] * (2. * self.num_small_nerf - yy)) / (2. * self.num_small_nerf),
+                              (bbox_min[2] * zz + bbox_max[2] * (2. * self.num_small_nerf - zz)) / (2. * self.num_small_nerf)
                               ])
     grid_center = jnp.array(grid_center)
 
