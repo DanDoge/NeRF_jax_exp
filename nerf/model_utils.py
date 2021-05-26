@@ -131,7 +131,7 @@ class full_MLP(nn.Module):
           dense_layer(128)(
             self.net_activation(
               dense_layer(128)(
-                x
+                x[Ellipsis, :3]
               )
             )
           )
