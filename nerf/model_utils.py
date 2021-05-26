@@ -149,8 +149,11 @@ class full_MLP(nn.Module):
         )
       )
 
-    inv_distance = 1. / ((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 10).sum(axis=-1)
+    inv_distance = 1. / ((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 2).sum(axis=-1)
     prob = inv_distance / inv_distance.sum(axis=-1)[Ellipsis, None]
+    hard_idx = prob.argmax(-1)
+    hard_prob = jax.lax.stop_gradient(jax.nn.one_hot(hard_idx, prob.shape[-1]))
+
     list_rgb = []
     list_sigma = []
     for nerf in list_nerf:
@@ -158,8 +161,8 @@ class full_MLP(nn.Module):
       list_rgb.append(rgb)
       list_sigma.append(sigma)
 
-    rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-    sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
+    rgb = (jnp.stack(list_rgb, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
+    sigma = (jnp.stack(list_sigma, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
 
 
     return rgb, sigma
