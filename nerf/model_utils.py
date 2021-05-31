@@ -122,8 +122,10 @@ class full_MLP(nn.Module):
 
   @nn.compact
   def __call__(self, x, condition=None):
-    bbox_max = jnp.array([3.02, 3.02, 2.60])
+    bbox_max = jnp.array([3.02, 3.02, 2.60]) # basically not wrong
     bbox_min = jnp.array([-3.02, -3.02, -2.60])
+    #bbox_max = jnp.array([0.7674710631370545, 1.0654609680175782, 1.167469847202301])
+    #bbox_min = jnp.array([-0.8325289607048034, -1.3345391273498535, -0.8325301527976989])
     grid_center = []
     for xx in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
       for yy in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
@@ -133,6 +135,8 @@ class full_MLP(nn.Module):
                               (bbox_min[2] * zz + bbox_max[2] * (2. * self.num_small_nerf - zz)) / (2. * self.num_small_nerf)
                               ])
     grid_center = jnp.array(grid_center)
+    #print(x.max(axis=[0, 1]), x.min(axis=[0, 1]),)
+    #print(grid_center, self.num_small_nerf ** 3)
 
     list_nerf = []
     for i in range(self.num_small_nerf ** 3):
@@ -153,11 +157,14 @@ class full_MLP(nn.Module):
     #prob = inv_distance / inv_distance.sum(axis=-1)[Ellipsis, None]
     hard_idx = prob.argmax(-1)
     hard_prob = jax.lax.stop_gradient(jax.nn.one_hot(hard_idx, prob.shape[-1]))
+    #jax.numpy.set_printoptions(edgeitems=4)
+    #print(hard_prob, hard_prob.sum(axis=(0, 1)))
 
     list_rgb = []
     list_sigma = []
-    for nerf in list_nerf:
-      rgb, sigma = nerf(x, condition)
+    for idx, nerf in enumerate(list_nerf):
+      #rgb, sigma = nerf(x, condition)
+      rgb, sigma = nerf(posenc(x[..., :3] - grid_center[idx], 0, 1, False), condition)
       list_rgb.append(rgb)
       list_sigma.append(sigma)
 
