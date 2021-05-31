@@ -149,8 +149,8 @@ class full_MLP(nn.Module):
         )
       )
 
-    inv_distance = 1. / ((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 2).sum(axis=-1)
-    prob = inv_distance / inv_distance.sum(axis=-1)[Ellipsis, None]
+    prob = 1. / (((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 2).sum(axis=-1) + 1e-3)
+    #prob = inv_distance / inv_distance.sum(axis=-1)[Ellipsis, None]
     hard_idx = prob.argmax(-1)
     hard_prob = jax.lax.stop_gradient(jax.nn.one_hot(hard_idx, prob.shape[-1]))
 
