@@ -25,3 +25,16 @@ lego chair drums ficus hotdog materials mic ship
 | materials  |    29.28 /     |   30.36 / 0.957   |
 | mic        |    32.67 /     |   32.96 /    |
 | ship       |    27.98 /     |   28.39 /    |
+
+### h64, nerf8
+
+| trail name |    gamma x    | gamma x outer |       x       |
+|:-----------|--------------:|--------------:|--------------:|
+| lego       | 27.96 / 0.903 |       /       | 28.01 / 0.904 | <- not accurate for x
+| chair      | 27.64 / 0.915 | 28.06 / 0.909 | 
+| drums      |       /       |       /       | 23.40 / 0.896 | 
+| ficus      |       /       |       /       | 27.55 / 0.938 | 
+| hotdog     |       /       |       /       | 33.65 / 0.960 | 
+| materials  |       /       |       /       |
+| mic        |       /       |       /       |
+| ship       |       /       |       /       |
