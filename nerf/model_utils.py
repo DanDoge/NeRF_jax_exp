@@ -164,7 +164,7 @@ class full_MLP(nn.Module):
     list_sigma = []
     for idx, nerf in enumerate(list_nerf):
       #rgb, sigma = nerf(x, condition)
-      rgb, sigma = nerf(posenc(x[..., :3] - grid_center[idx], 0, 1, False), condition)
+      rgb, sigma = nerf(posenc((x - grid_center[idx]) / (bbox_max - bbox_min) * self.num_small_nerf * 2 * jnp.pi, 0, 10, False), condition)
       list_rgb.append(rgb)
       list_sigma.append(sigma)
 
