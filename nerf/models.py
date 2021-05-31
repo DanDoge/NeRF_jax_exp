@@ -56,7 +56,7 @@ class NerfModel(nn.Module):
   rgb_activation: Callable[Ellipsis, Any]  # Output RGB activation.
   sigma_activation: Callable[Ellipsis, Any]  # Output sigma activation.
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
-  num_small_nerf: int = 4
+  num_small_nerf: int = 2
 
   @nn.compact
   def __call__(self, rng_0, rng_1, rays, randomized):
