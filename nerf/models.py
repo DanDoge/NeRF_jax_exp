@@ -132,7 +132,7 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    raw_rgb, raw_sigma = mlp_coarse(samples_enc, it, viewdirs_enc, prob(samples_enc), rng_0)
+    raw_rgb, raw_sigma = mlp_coarse(samples_enc, it, viewdirs_enc, prob(model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order, it)), rng_0)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -174,7 +174,7 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
 
-      raw_rgb, raw_sigma = mlp_fine(samples_enc, it, viewdirs_enc, prob(samples_enc), rng_1)
+      raw_rgb, raw_sigma = mlp_fine(samples_enc, it, viewdirs_enc, prob(model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order, it)), rng_1)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)
