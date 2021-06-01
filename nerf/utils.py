@@ -98,7 +98,7 @@ def define_flags():
                        "width of the second part of MLP.")
   flags.DEFINE_float("weight_decay_mult", 0, "The multiplier on weight decay")
   flags.DEFINE_integer(
-      "skip_layer", 3, "add a skip connection to the output vector of every"
+      "skip_layer", 4, "add a skip connection to the output vector of every"
       "skip_layer layers.")
   flags.DEFINE_integer("num_rgb_channels", 3, "the number of RGB channels.")
   flags.DEFINE_integer("num_sigma_channels", 1,
