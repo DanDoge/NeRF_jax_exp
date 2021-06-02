@@ -30,11 +30,13 @@ lego chair drums ficus hotdog materials mic ship
 
 | trail name |    gamma x    | gamma x outer |       x       |
 |:-----------|--------------:|--------------:|--------------:|
-| lego       | 27.96 / 0.903 |       /       | 28.01 / 0.904 | <- not accurate for x
+| lego       | 27.96 / 0.903 |       /       | 28.01 / 0.904 |
 | chair      | 27.64 / 0.915 | 28.06 / 0.909 | 
 | drums      | 22.22 / 0.870 | 23.38 / 0.897 | 23.40 / 0.896 | 
-| ficus      |       /       |       /       | 27.55 / 0.938 | 
+| ficus      | 27.50 / 0.938 | 27.50 / 0.937 | 27.55 / 0.938 | 
 | hotdog     |       /       |       /       | 33.65 / 0.960 | 
 | materials  |       /       |       /       | 27.61 / 0.927 | 
-| mic        |       /       |       /       |
+| mic        |       /       |       /       | 30.68 / 0.966 | 
 | ship       |       /       |       /       |
+
+kilonerf, local posenc: lego 30.97 0.949
