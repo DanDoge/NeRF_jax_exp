@@ -139,6 +139,10 @@ class Dataset(threading.Thread):
   def _next_train(self):
     """Sample next training batch."""
     self.it += 1
+    if self.it > 100000:
+      pretrain = False
+    else:
+      pretrain = True
 
     if self.batching == "all_images":
       ray_indices = np.random.randint(0, self.rays[0].shape[0],
@@ -155,7 +159,7 @@ class Dataset(threading.Thread):
     else:
       raise NotImplementedError(
           f"{self.batching} batching strategy is not implemented.")
-    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it * np.ones_like(batch_pixels)}
+    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it * np.ones_like(batch_pixels), "pretrain": np.ones_like(batch_pixels)}
 
   def _next_test(self):
     """Sample next test example."""
@@ -169,6 +173,7 @@ class Dataset(threading.Thread):
           "pixels": self.images[idx],
           "rays": utils.namedtuple_map(lambda r: r[idx], self.rays), 
           "iter": 500000 * np.ones_like(self.images[idx]),
+          "pretrain": np.zeros_like(self.images[idx]),
       }
 
   # TODO(bydeng): Swap this function with a more flexible camera model.

@@ -44,6 +44,7 @@ class Stats:
   loss_c: float
   psnr_c: float
   weight_l2: float
+  loss_prob: float
 
 
 Rays = collections.namedtuple("Rays", ("origins", "directions", "viewdirs"))
@@ -247,7 +248,7 @@ def render_image(render_fn, rays, rng, normalize_disp, chunk=8192):
     chunk_results = render_fn(key_0, key_1, chunk_rays)[-1]
     results.append([unshard(x[0], padding) for x in chunk_results])
     # pylint: enable=cell-var-from-loop
-  rgb, disp, acc = [jnp.concatenate(r, axis=0) for r in zip(*results)]
+  rgb, disp, acc, _ = [jnp.concatenate(r, axis=0) for r in zip(*results)]
   #print(prob.shape)
   # Normalize disp for visualization for ndc_rays in llff front-facing scenes.
   if normalize_disp:

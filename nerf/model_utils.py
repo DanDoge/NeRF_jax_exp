@@ -100,7 +100,7 @@ class full_MLP(nn.Module):
   num_small_nerf: int = 8
 
   @nn.compact
-  def __call__(self, x, it, condition=None, rng=None):
+  def __call__(self, x, it, pretrain, condition=None, rng=None):
     list_nerf = []
     for i in range(self.num_small_nerf):
       list_nerf.append(
@@ -148,21 +148,22 @@ class full_MLP(nn.Module):
       prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(0.5, 1. - it.reshape(-1)[0] / 500000))
 
 
-    prob = prob / prob.sum(axis=-1)[Ellipsis, None]
+    soft_prob = prob / prob.sum(axis=-1)[Ellipsis, None]
 
-    hard_idx = prob.argmax(-1)
-    hard_prob = jax.nn.one_hot(hard_idx, prob.shape[-1])
+    hard_idx = soft_prob.argmax(-1)
+    hard_prob = jax.nn.one_hot(hard_idx, soft_prob.shape[-1])
 
-    if it > 100000:
-      prob = hard_prob
+    if pretrain is None:
+      pretrain = 0.
     else:
-      prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
+      pretrain = pretrain.reshape(-1)[0]
+    soft_prob = pretrain * soft_prob + (1. - pretrain) * hard_prob
 
     
-    rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
-    sigma = (jnp.stack(list_sigma, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
+    rgb = (jnp.stack(list_rgb, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
+    sigma = (jnp.stack(list_sigma, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
 
-    return rgb, sigma
+    return rgb, sigma, soft_prob
 
 
 def cast_rays(z_vals, origins, directions):
@@ -234,7 +235,7 @@ def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
   return jnp.concatenate([x] + [four_feat], axis=-1)
 
 
-def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
+def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):
   """Volumetric Rendering Function.
   Args:
     rgb: jnp.ndarray(float32), color, [batch_size, num_samples, 3]
@@ -264,6 +265,7 @@ def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   weights = alpha * accum_prod
 
   comp_rgb = (weights[Ellipsis, None] * rgb).sum(axis=-2)
+  comp_prob = (jax.lax.stop_gradient(weights[Ellipsis, None]) * prob).sum(axis=-2)
   depth = (weights * z_vals).sum(axis=-1)
   acc = weights.sum(axis=-1)
   # Equivalent to (but slightly more efficient and stable than):
@@ -273,7 +275,7 @@ def volumetric_rendering(rgb, sigma, z_vals, dirs, white_bkgd):
   disp = jnp.where((disp > 0) & (disp < inv_eps) & (acc > eps), disp, inv_eps)
   if white_bkgd:
     comp_rgb = comp_rgb + (1. - acc[Ellipsis, None])
-  return comp_rgb, depth, acc, weights
+  return comp_rgb, depth, comp_prob, acc, weights
 
 
 def piecewise_constant_pdf(key, bins, weights, num_samples, randomized):

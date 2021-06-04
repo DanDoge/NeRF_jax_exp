@@ -58,19 +58,22 @@ def train_step(model, rng, state, batch, lr):
   def loss_fn(variables):
     rays = batch["rays"]
     it = batch["iter"]
-    ret = model.apply(variables, key_0, key_1, rays, it, FLAGS.randomized)
+    ret = model.apply(variables, key_0, key_1, rays, it, batch["pretrain"], FLAGS.randomized)
     if len(ret) not in (1, 2):
       raise ValueError(
           "ret should contain either 1 set of output (coarse only), or 2 sets"
           "of output (coarse as ret[0] and fine as ret[1]).")
     # The main prediction is always at the end of the ret list.
-    rgb, unused_disp, unused_acc = ret[-1]
+    rgb, unused_disp, unused_acc, fine_prob = ret[-1]
+    #print(fine_prob.shape)
+    loss_prob = (fine_prob.mean(axis=0) ** 2).mean()
     loss = ((rgb - batch["pixels"][Ellipsis, :3])**2).mean()
     psnr = utils.compute_psnr(loss)
     if len(ret) > 1:
       # If there are both coarse and fine predictions, we compute the loss for
       # the coarse prediction (ret[0]) as well.
-      rgb_c, unused_disp_c, unused_acc_c = ret[0]
+      rgb_c, unused_disp_c, unused_acc_c, coarse_prob = ret[0]
+      loss_prob += (coarse_prob.mean(axis=0) ** 2).mean()
       loss_c = ((rgb_c - batch["pixels"][Ellipsis, :3])**2).mean()
       psnr_c = utils.compute_psnr(loss_c)
     else:
@@ -86,8 +89,8 @@ def train_step(model, rng, state, batch, lr):
         tree_sum_fn(lambda z: jnp.prod(jnp.array(z.shape))))
 
     stats = utils.Stats(
-        loss=loss, psnr=psnr, loss_c=loss_c, psnr_c=psnr_c, weight_l2=weight_l2)
-    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2, stats
+        loss=loss, psnr=psnr, loss_c=loss_c, psnr_c=psnr_c, weight_l2=weight_l2, loss_prob=loss_prob)
+    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2 + 0.01 * loss_prob, stats
 
   (_, stats), grad = (
       jax.value_and_grad(loss_fn, has_aux=True)(state.optimizer.target))
@@ -151,7 +154,7 @@ def main(unused_argv):
 
   def render_fn(variables, key_0, key_1, rays):
     return jax.lax.all_gather(
-        model.apply(variables, key_0, key_1, rays, None, FLAGS.randomized),
+        model.apply(variables, key_0, key_1, rays, None, None, FLAGS.randomized),
         axis_name="batch")
 
   render_pfn = jax.pmap(
@@ -200,6 +203,7 @@ def main(unused_argv):
     if jax.host_id() == 0:
       if step % FLAGS.print_every == 0:
         summary_writer.scalar("train_loss", stats.loss[0], step)
+        summary_writer.scalar("train_loss_prob", stats.loss_prob[0], step)
         summary_writer.scalar("train_psnr", stats.psnr[0], step)
         summary_writer.scalar("train_loss_coarse", stats.loss_c[0], step)
         summary_writer.scalar("train_psnr_coarse", stats.psnr_c[0], step)
