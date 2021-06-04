@@ -147,12 +147,16 @@ class full_MLP(nn.Module):
     else:
       prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(0.5, 1. - it.reshape(-1)[0] / 500000))
 
+
     prob = prob / prob.sum(axis=-1)[Ellipsis, None]
 
     hard_idx = prob.argmax(-1)
     hard_prob = jax.nn.one_hot(hard_idx, prob.shape[-1])
 
-    prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
+    if it > 100000:
+      prob = hard_prob
+    else:
+      prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
 
     
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)

@@ -34,9 +34,9 @@ lego chair drums ficus hotdog materials mic ship
 | chair      | 27.64 / 0.915 | 28.06 / 0.909 | 
 | drums      | 22.22 / 0.870 | 23.38 / 0.897 | 23.40 / 0.896 | 
 | ficus      | 27.50 / 0.938 | 27.50 / 0.937 | 27.55 / 0.938 | 
-| hotdog     |       /       |       /       | 33.65 / 0.960 | 
-| materials  |       /       |       /       | 27.61 / 0.927 | 
+| hotdog     | 33.50 / 0.959 | 33.73 / 0.959 | 33.65 / 0.960 | 
+| materials  | 27.42 / 0.924 |       /       | 27.61 / 0.927 | 
 | mic        |       /       |       /       | 30.68 / 0.966 | 
-| ship       |       /       |       /       |
+| ship       |       /       |       /       | 27.07 / 0.828 |
 
 kilonerf, local posenc: lego 30.97 0.949
