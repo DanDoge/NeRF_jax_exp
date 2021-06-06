@@ -119,7 +119,7 @@ class NerfModel(nn.Module):
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
                                                     self.num_coarse_samples, self.near,
                                                     self.far, randomized, self.lindisp)
-    samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
+    #samples_enc = model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order)
     # Point attribute predictions
     viewdirs_enc = model_utils.posenc(          
           rays.viewdirs,
@@ -127,7 +127,7 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    raw_rgb, raw_sigma = mlp_coarse(samples_enc, it, viewdirs_enc, rng_0)
+    raw_rgb, raw_sigma = mlp_coarse(samples, it, viewdirs_enc, rng_0)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -162,14 +162,7 @@ class NerfModel(nn.Module):
           randomized,
       )
 
-      samples_enc = model_utils.posenc(          
-          samples,
-          self.min_deg_point,
-          self.max_deg_point,
-          self.legacy_posenc_order,
-      )
-
-      raw_rgb, raw_sigma = mlp_fine(samples_enc, it, viewdirs_enc, rng_1)
+      raw_rgb, raw_sigma = mlp_fine(samples, it, viewdirs_enc, rng_1)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)

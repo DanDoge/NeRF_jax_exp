@@ -60,6 +60,11 @@ class MLP(nn.Module):
     x = x.reshape([-1, feature_dim])
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+
+    x = nn.Dense(30, False, kernel_init=jax.nn.initializers.normal(2.))(x)
+    x = jnp.concatenate([x] + [jnp.sin(jnp.concatenate([x, x + 0.5 * jnp.pi], axis=-1))], axis=-1)
+    x = jax.lax.stop_gradient(x)
+
     inputs = x
     for i in range(self.net_depth):
       x = dense_layer(self.net_width)(x)
@@ -153,10 +158,7 @@ class full_MLP(nn.Module):
     hard_idx = prob.argmax(-1)
     hard_prob = jax.nn.one_hot(hard_idx, prob.shape[-1])
 
-    if it > 100000:
-      prob = hard_prob
-    else:
-      prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
+    prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
 
     
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
