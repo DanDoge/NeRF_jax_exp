@@ -90,7 +90,7 @@ def train_step(model, rng, state, batch, lr):
 
     stats = utils.Stats(
         loss=loss, psnr=psnr, loss_c=loss_c, psnr_c=psnr_c, weight_l2=weight_l2, loss_prob=loss_prob)
-    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2 + 0.01 * loss_prob, stats
+    return loss + loss_c + FLAGS.weight_decay_mult * weight_l2 + loss_prob, stats
 
   (_, stats), grad = (
       jax.value_and_grad(loss_fn, has_aux=True)(state.optimizer.target))

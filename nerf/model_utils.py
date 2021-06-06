@@ -160,12 +160,12 @@ class full_MLP(nn.Module):
       pretrain = 0.
     else:
       pretrain = pretrain.reshape(-1)[0]
-    soft_prob = pretrain * soft_prob + (1. - pretrain) * hard_prob
+    #soft_prob = pretrain * soft_prob + (1. - pretrain) * hard_prob
 
     # for joint training of selector and nerf
     # pretrain: allow gradient from recons update selector
-    hard_prob = pretrain * (jax.lax.stop_gradient(hard_prob - prob) + prob) + (1. - pretrain) * hard_prob
-    
+    #hard_prob = pretrain * (jax.lax.stop_gradient(hard_prob - prob) + prob) + (1. - pretrain) * hard_prob
+
     rgb = (jnp.stack(list_rgb, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
 
