@@ -159,7 +159,7 @@ class Dataset(threading.Thread):
     else:
       raise NotImplementedError(
           f"{self.batching} batching strategy is not implemented.")
-    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it * np.ones_like(batch_pixels), "pretrain": np.ones_like(batch_pixels)}
+    return {"pixels": batch_pixels, "rays": batch_rays, "iter": self.it * np.ones_like(batch_pixels), "pretrain": pretrain * np.ones_like(batch_pixels)}
 
   def _next_test(self):
     """Sample next test example."""
