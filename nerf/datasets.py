@@ -140,9 +140,9 @@ class Dataset(threading.Thread):
     """Sample next training batch."""
     self.it += 1
     if self.it > 100000:
-      pretrain = False
+      pretrain = 0.
     else:
-      pretrain = True
+      pretrain = 1.
 
     if self.batching == "all_images":
       ray_indices = np.random.randint(0, self.rays[0].shape[0],
