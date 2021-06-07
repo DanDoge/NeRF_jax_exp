@@ -116,6 +116,7 @@ class Dataset(threading.Thread):
     """Initialize training."""
     self._load_renderings(args)
     self._generate_rays()
+    self.it = 0
 
     if args.batching == "all_images":
       # flatten the ray and image dimension together.
@@ -137,6 +138,7 @@ class Dataset(threading.Thread):
 
   def _next_train(self):
     """Sample next training batch."""
+    self.it += 1
 
     if self.batching == "all_images":
       ray_indices = np.random.randint(0, self.rays[0].shape[0],
