@@ -61,7 +61,7 @@ class MLP(nn.Module):
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
 
-    x = nn.Dense(30, False, kernel_init=jax.nn.initializers.normal(2.))(x)
+    x = nn.Dense(30, False, kernel_init=jax.nn.initializers.normal(20.))(x)
     x = jnp.concatenate([x] + [jnp.sin(jnp.concatenate([x, x + 0.5 * jnp.pi], axis=-1))], axis=-1)
     x = jax.lax.stop_gradient(x)
 
