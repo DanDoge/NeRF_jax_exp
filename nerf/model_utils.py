@@ -20,6 +20,8 @@ import functools
 from typing import Any, Callable
 import math
 
+from numpy.linalg import eig
+
 from flax import linen as nn
 import jax
 from jax import lax
@@ -101,6 +103,22 @@ class full_MLP(nn.Module):
 
   @nn.compact
   def __call__(self, x, it, condition=None, rng=None):
+
+    bbox_max = jnp.array([3.02, 3.02, 2.60]) # basically not wrong
+    bbox_min = jnp.array([-3.02, -3.02, -2.60])
+    #bbox_max = jnp.array([0.7674710631370545, 1.0654609680175782, 1.167469847202301])
+    #bbox_min = jnp.array([-0.8325289607048034, -1.3345391273498535, -0.8325301527976989])
+    grid_center = []
+    for xx in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
+      for yy in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
+        for zz in jnp.arange(1., 2. * self.num_small_nerf + 1., 2.):
+          grid_center.append([(bbox_min[0] * xx + bbox_max[0] * (2. * self.num_small_nerf - xx)) / (2. * self.num_small_nerf),
+                              (bbox_min[1] * yy + bbox_max[1] * (2. * self.num_small_nerf - yy)) / (2. * self.num_small_nerf),
+                              (bbox_min[2] * zz + bbox_max[2] * (2. * self.num_small_nerf - zz)) / (2. * self.num_small_nerf)
+                              ])
+    grid_center = jnp.array(grid_center)
+
+
     list_nerf = []
     for i in range(self.num_small_nerf):
       list_nerf.append(
@@ -125,27 +143,17 @@ class full_MLP(nn.Module):
 
     dense_layer = functools.partial(
       nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
-    prob = nn.softmax(
-      dense_layer(self.num_small_nerf)(
-        self.net_activation(
-          dense_layer(128)(
-            self.net_activation(
-              dense_layer(128)(
-                x
-              )
-            )
-          )
-        )
-      )
-    )
+    
+    prob = 1. / (((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 2).sum(axis=-1) + 1.)
+    prob = prob / prob.sum(axis=-1)[Ellipsis, None]
 
     key, rng = jax.random.split(rng)
     gumbel = jax.random.gumbel(key, shape=[self.num_small_nerf])
 
     if it is None:
-      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / 0.5)
+      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / 1.)
     else:
-      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(0.5, 1. - it.reshape(-1)[0] / 500000))
+      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(1., 1. - it.reshape(-1)[0] / 500000))
 
 
     prob = prob / prob.sum(axis=-1)[Ellipsis, None]
@@ -153,10 +161,7 @@ class full_MLP(nn.Module):
     hard_idx = prob.argmax(-1)
     hard_prob = jax.nn.one_hot(hard_idx, prob.shape[-1])
 
-    if it > 100000:
-      prob = hard_prob
-    else:
-      prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
+    prob = jax.lax.stop_gradient(hard_prob - prob) + prob 
 
     
     rgb = (jnp.stack(list_rgb, axis=-1) * prob[Ellipsis, None, :]).sum(axis=-1)
