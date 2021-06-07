@@ -99,7 +99,7 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 8
+  num_small_nerf: int = 2
 
   @nn.compact
   def __call__(self, x, it, condition=None, rng=None):
@@ -120,7 +120,7 @@ class full_MLP(nn.Module):
 
 
     list_nerf = []
-    for i in range(self.num_small_nerf):
+    for i in range(self.num_small_nerf ** 3):
       list_nerf.append(
         MLP(
           net_depth=self.net_depth,
