@@ -26,6 +26,27 @@ from jax import lax
 from jax import random
 import jax.numpy as jnp
 
+class Selector(nn.Module):
+  num_small_nerf: int = 4
+  net_activation: Callable[Ellipsis, Any] = nn.relu  # The activation function.
+
+  @nn.compact
+  def __call__(self, x):
+    dense_layer = functools.partial(
+      nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
+    return nn.softmax(
+      dense_layer(self.num_small_nerf)(
+        self.net_activation(
+          dense_layer(128)(
+            self.net_activation(
+              dense_layer(128)(
+                x
+              )
+            )
+          )
+        )
+      )
+    )
 
 
 class MLP(nn.Module):
@@ -100,7 +121,7 @@ class full_MLP(nn.Module):
   num_small_nerf: int = 8
 
   @nn.compact
-  def __call__(self, x, it, pretrain, condition=None, rng=None):
+  def __call__(self, x, it, pretrain, condition=None, prob=None, rng=None):
     list_nerf = []
     for i in range(self.num_small_nerf):
       list_nerf.append(
@@ -122,22 +143,6 @@ class full_MLP(nn.Module):
       rgb, sigma = nerf(x, condition)
       list_rgb.append(rgb)
       list_sigma.append(sigma)
-
-    dense_layer = functools.partial(
-      nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
-    prob = nn.softmax(
-      dense_layer(self.num_small_nerf)(
-        self.net_activation(
-          dense_layer(128)(
-            self.net_activation(
-              dense_layer(128)(
-                x
-              )
-            )
-          )
-        )
-      )
-    )
     
     prob_bkup = prob
 
@@ -218,7 +223,7 @@ def sample_along_rays(key, origins, directions, num_samples, near, far,
   return z_vals, coords
 
 
-def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
+def posenc(x, min_deg, max_deg, legacy_posenc_order=False, it=None):
   """Cat x with a positional encoding of x with scales 2^[min_deg, max_deg-1].
   Instead of computing [sin(x), cos(x)], we use the trig identity
   cos(x) = sin(x + pi/2) and do one vectorized call to sin([x, x+pi/2]).
@@ -242,7 +247,17 @@ def posenc(x, min_deg, max_deg, legacy_posenc_order=False):
     xb = jnp.reshape((x[Ellipsis, None, :] * scales[:, None]),
                      list(x.shape[:-1]) + [-1])
     four_feat = jnp.sin(jnp.concatenate([xb, xb + 0.5 * jnp.pi], axis=-1))
+    idxes = jnp.array([[i, i, i] for i in range(0, max_deg - min_deg)]).reshape(-1)
+    if it is None:
+      it = 500000.
+    else:
+      it = it.reshape(-1)[0]
+    coef = jnp.minimum(jnp.maximum((it * (max_deg - min_deg) / 500000. - idxes), 0.), 1.)
+    coef = jnp.concatenate([coef, coef])
+    four_feat = four_feat * coef
+
   return jnp.concatenate([x] + [four_feat], axis=-1)
+
 
 
 def volumetric_rendering(rgb, sigma, prob, z_vals, dirs, white_bkgd):

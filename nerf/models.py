@@ -56,6 +56,7 @@ class NerfModel(nn.Module):
   rgb_activation: Callable[Ellipsis, Any]  # Output RGB activation.
   sigma_activation: Callable[Ellipsis, Any]  # Output sigma activation.
   legacy_posenc_order: bool  # Keep the same ordering as the original tf code.
+  num_small_nerf: int = 8
 
   @nn.compact
   def __call__(self, rng_0, rng_1, rays, it, pretrain, randomized):
@@ -104,7 +105,8 @@ class NerfModel(nn.Module):
         net_activation=self.net_activation,
         skip_layer=self.skip_layer,
         num_rgb_channels=self.num_rgb_channels,
-        num_sigma_channels=self.num_sigma_channels)
+        num_sigma_channels=self.num_sigma_channels, 
+        num_small_nerf=self.num_small_nerf)
     mlp_fine = model_utils.full_MLP(
         net_depth=self.net_depth,
         net_width=self.net_width,
@@ -113,7 +115,9 @@ class NerfModel(nn.Module):
         net_activation=self.net_activation,
         skip_layer=self.skip_layer,
         num_rgb_channels=self.num_rgb_channels,
-        num_sigma_channels=self.num_sigma_channels)
+        num_sigma_channels=self.num_sigma_channels, 
+        num_small_nerf=self.num_small_nerf)
+    prob = model_utils.Selector(self.num_small_nerf)
     # Stratified sampling along rays
     key, rng_0 = random.split(rng_0)
     z_vals, samples = model_utils.sample_along_rays(key, rays.origins, rays.directions,
@@ -127,7 +131,9 @@ class NerfModel(nn.Module):
           self.deg_view,
           self.legacy_posenc_order)
 
-    raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, it, pretrain, viewdirs_enc, rng_0)
+    raw_rgb, raw_sigma, coarse_prob = mlp_coarse(samples_enc, it, pretrain, viewdirs_enc,
+                                                  prob(model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order, it)), 
+                                                  rng_0)
     key, rng_0 = random.split(rng_0)
     raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                randomized)
@@ -170,7 +176,9 @@ class NerfModel(nn.Module):
           self.legacy_posenc_order,
       )
 
-      raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, it, pretrain, viewdirs_enc, rng_1)
+      raw_rgb, raw_sigma, fine_prob = mlp_fine(samples_enc, it, pretrain, viewdirs_enc, 
+                                                prob(model_utils.posenc(samples, self.min_deg_point, self.max_deg_point, self.legacy_posenc_order, it)), 
+                                                rng_1)
       key, rng_1 = random.split(rng_1)
       raw_sigma = model_utils.add_gaussian_noise(key, raw_sigma, self.noise_std,
                                                  randomized)
