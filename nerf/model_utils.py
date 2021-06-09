@@ -146,13 +146,13 @@ class full_MLP(nn.Module):
     
     prob_bkup = prob
 
-    key, rng = jax.random.split(rng)
-    gumbel = jax.random.gumbel(key, shape=[self.num_small_nerf])
+    #key, rng = jax.random.split(rng)
+    #gumbel = jax.random.gumbel(key, shape=[self.num_small_nerf])
 
     if it is None:
-      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / 0.5)
+      prob = jnp.exp((jnp.log(prob + 1e-5) + 1e-3) / 0.5)
     else:
-      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(0.5, 1. - it.reshape(-1)[0] / 500000))
+      prob = jnp.exp((jnp.log(prob + 1e-5) + 1e-3) / jnp.maximum(0.5, 1. - it.reshape(-1)[0] / 500000))
 
 
     # for fixing selector
@@ -165,6 +165,7 @@ class full_MLP(nn.Module):
     prob = prob / prob.sum(axis=-1)[Ellipsis, None]
     soft_prob = prob
 
+    '''
     # pretrain: hard_prob with randomness
     # soft_prob can be updated
     hard_idx = soft_prob.argmax(-1)
@@ -174,6 +175,12 @@ class full_MLP(nn.Module):
     # for joint training of selector and nerf
     # pretrain: allow gradient from recons update selector
     hard_prob = pretrain * (jax.lax.stop_gradient(hard_prob - prob) + prob) + (1. - pretrain) * hard_prob
+    '''
+
+    # no pretraining:
+    hard_idx = soft_prob.argmax(-1)
+    hard_prob = pretrain * jax.nn.one_hot(hard_idx, soft_prob.shape[-1])
+    hard_prob = jax.lax.stop_gradient(hard_prob - prob) + prob
 
     rgb = (jnp.stack(list_rgb, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
     sigma = (jnp.stack(list_sigma, axis=-1) * hard_prob[Ellipsis, None, :]).sum(axis=-1)
