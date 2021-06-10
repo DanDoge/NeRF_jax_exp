@@ -136,26 +136,12 @@ class full_MLP(nn.Module):
 
     list_rgb = []
     list_sigma = []
-    for nerf in list_nerf:
-      rgb, sigma = nerf(x, condition)
+    for idx, nerf in enumerate(list_nerf):
+      rgb, sigma = nerf(posenc(x[..., :3] - grid_center[idx], 0, 10, False), condition)
       list_rgb.append(rgb)
       list_sigma.append(sigma)
-
-    dense_layer = functools.partial(
-      nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
     
     prob = 1. / (((x[..., None, :3] - grid_center[None, None, Ellipsis]) ** 2).sum(axis=-1) + 1.)
-    prob = prob / prob.sum(axis=-1)[Ellipsis, None]
-
-    key, rng = jax.random.split(rng)
-    gumbel = jax.random.gumbel(key, shape=[self.num_small_nerf])
-
-    if it is None:
-      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / 1.)
-    else:
-      prob = jnp.exp((jnp.log(prob + 1e-5) + gumbel) / jnp.maximum(1., 1. - it.reshape(-1)[0] / 500000))
-
-
     prob = prob / prob.sum(axis=-1)[Ellipsis, None]
 
     hard_idx = prob.argmax(-1)
