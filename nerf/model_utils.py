@@ -58,12 +58,14 @@ class MLP(nn.Module):
     feature_dim = x.shape[-1]
     num_samples = x.shape[1]
     x = x.reshape([-1, feature_dim])
+    x_bkup = x
     dense_layer = functools.partial(
         nn.Dense, kernel_init=jax.nn.initializers.glorot_uniform())
 
     x = nn.Dense(30, False, kernel_init=jax.nn.initializers.normal(20.))(x)
-    x = jnp.concatenate([x] + [jnp.sin(jnp.concatenate([x, x + 0.5 * jnp.pi], axis=-1))], axis=-1)
-    x = jax.lax.stop_gradient(x)
+    x = jnp.concatenate([x_bkup] + [jnp.sin(jnp.concatenate([x, x + 0.5 * jnp.pi], axis=-1))], axis=-1)
+    #x = jax.lax.stop_gradient(x)
+    x = jnp.concatenate([x_bkup] + [posenc(x_bkup, 0, 10, False)], axis=-1)
 
     inputs = x
     for i in range(self.net_depth):
