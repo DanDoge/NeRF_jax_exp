@@ -118,7 +118,7 @@ class full_MLP(nn.Module):
   skip_layer: int = 4  # The layer to add skip layers to.
   num_rgb_channels: int = 3  # The number of RGB channels.
   num_sigma_channels: int = 1  # The number of sigma channels.
-  num_small_nerf: int = 2
+  num_small_nerf: int = 4
 
   @nn.compact
   def __call__(self, x, condition=None):
@@ -143,9 +143,9 @@ class full_MLP(nn.Module):
       list_nerf.append(
         MLP(
           net_depth=self.net_depth,
-          net_width=64,
+          net_width=32,
           net_depth_condition=self.net_depth_condition,
-          net_width_condition=32,
+          net_width_condition=16,
           net_activation=self.net_activation,
           skip_layer=self.skip_layer,
           num_rgb_channels=self.num_rgb_channels,
